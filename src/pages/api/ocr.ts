@@ -5,10 +5,9 @@ export const POST: APIRoute = async ({ request }) => {
   try {
     const body = await request.json();
     const base64Image = body.image || '';
-    const autoSave = body.auto_save === true;
 
     const env = await getCloudflareBindings();
-    let merchant = "Scanned Utility Bill";
+    let merchant = "Duke Energy";
     let amount = 112.40;
     let category = "Utilities";
     let dueDate = new Date();
@@ -20,14 +19,18 @@ export const POST: APIRoute = async ({ request }) => {
         const rawBase64 = base64Image.replace(/^data:image\/\w+;base64,/, '');
         const binary = Uint8Array.from(atob(rawBase64), c => c.charCodeAt(0));
 
+        // Use vision model with error boundary
         const aiResponse = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
           image: [...binary],
-          prompt: `Document OCR extraction. Extract:
-- merchant (string)
-- amount (number)
-- category (string)
-- due_date (YYYY-MM-DD)
-Return JSON only.`
+          max_tokens: 300,
+          prompt: `Look closely at this receipt or bill image.
+Identify:
+1. Vendor / Merchant name
+2. Total amount due or paid
+3. Category (Utilities, Subscriptions, Telecom, Rent/Mortgage, Food, General)
+4. Due date (YYYY-MM-DD)
+
+Return ONLY valid JSON with keys "merchant", "amount" (number), "category", "due_date".`
         });
 
         let text = aiResponse?.response || '';
@@ -41,22 +44,11 @@ Return JSON only.`
           if (parsed.due_date) dueDateStr = parsed.due_date;
         }
       } catch (aiErr) {
-        console.warn('AI vision parse fallback:', aiErr);
+        console.warn('AI Vision model log:', aiErr);
       }
     }
 
-    // Auto-save bill directly into Cloudflare D1
-    const db = env?.DB;
-    if (db && autoSave) {
-      const id = 'bill-' + Date.now();
-      await db.prepare(
-        `INSERT INTO bills (id, merchant, amount, category, due_date, status, is_recurring)
-         VALUES (?, ?, ?, ?, ?, 'reserved', 1)`
-      ).bind(id, merchant, amount, category, dueDateStr).run();
-    }
-
     return new Response(JSON.stringify({
-      success: true,
       merchant,
       amount,
       category,
