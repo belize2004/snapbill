@@ -100,10 +100,38 @@ import AppLayout from '../layouts/AppLayout.astro';
       console.warn('Could not read pending bill:', e);
     }
 
-    const save = () => {
-      alert('Bill successfully saved and added to Reserved Bills pool!');
-      window.location.href = '/reserved';
-    };
+    async function save() {
+      const merchant = (document.getElementById('merchantInput') as HTMLInputElement).value.trim();
+      const amount = parseFloat((document.getElementById('amountInput') as HTMLInputElement).value);
+      const dueDate = (document.getElementById('dueDateInput') as HTMLInputElement).value;
+      const category = (document.getElementById('categoryInput') as HTMLSelectElement).value;
+      const isReserved = (document.getElementById('reserveToggle') as HTMLInputElement).checked;
+
+      if (!merchant || isNaN(amount) || amount <= 0 || !dueDate) {
+        alert('Please ensure vendor, amount, and due date are filled.');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/bills', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            merchant,
+            amount,
+            due_date: dueDate,
+            category,
+            status: isReserved ? 'reserved' : 'uncovered'
+          })
+        });
+
+        sessionStorage.removeItem('pendingBill');
+        window.location.href = '/reserved';
+      } catch (err) {
+        console.error('Save bill error:', err);
+        window.location.href = '/reserved';
+      }
+    }
 
     document.getElementById('saveBillBtn')?.addEventListener('click', save);
     document.getElementById('confirmSaveBtn')?.addEventListener('click', save);
