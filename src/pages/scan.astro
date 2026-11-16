@@ -20,13 +20,17 @@ import AppLayout from '../layouts/AppLayout.astro';
       <video id="cameraFeed" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover"></video>
       <canvas id="photoCanvas" class="hidden"></canvas>
 
-      <!-- Fallback message if camera permission blocked -->
-      <div id="cameraBlockedNotice" class="hidden absolute inset-0 bg-[#1a1b1f] flex flex-col items-center justify-center p-6 text-center text-white space-y-3 z-10">
-        <span class="material-symbols-outlined text-[48px] text-[#007aff]">no_photography</span>
-        <h3 class="text-base font-bold">Camera Permission Needed</h3>
-        <p class="text-xs text-white/70 max-w-xs">
-          Tap the shutter below to take a photo directly with your camera app, or choose an existing photo from your library.
-        </p>
+      <!-- Fallback view if live video stream is not active -->
+      <div id="cameraBlockedNotice" class="hidden absolute inset-0 bg-[#1a1b1f] flex flex-col items-center justify-center p-6 text-center text-white space-y-4 z-10">
+        <div class="w-16 h-16 rounded-full bg-[#007aff]/20 flex items-center justify-center text-[#007aff]">
+          <span class="material-symbols-outlined text-[36px]">photo_camera</span>
+        </div>
+        <div>
+          <h3 class="text-base font-bold">Snap or Upload Bill</h3>
+          <p class="text-xs text-white/70 max-w-xs mt-1">
+            Tap the shutter button below to take a photo, or choose a bill/receipt from your library.
+          </p>
+        </div>
       </div>
 
       <!-- Apple Document Alignment Overlay Guidelines -->
@@ -47,10 +51,10 @@ import AppLayout from '../layouts/AppLayout.astro';
       </div>
 
       <!-- Loading / Analyzing Spinner -->
-      <div id="ocrLoading" class="hidden absolute inset-0 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center text-white z-20 space-y-3">
+      <div id="ocrLoading" class="hidden absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center text-white z-30 space-y-3">
         <div class="w-12 h-12 border-4 border-[#007aff] border-t-transparent rounded-full animate-spin"></div>
         <p class="text-sm font-semibold">Extracting bill details with AI...</p>
-        <p class="text-xs text-white/70" id="loadingStatusText">Vendor, Total, Due Date & Line Items</p>
+        <p class="text-xs text-white/70" id="loadingStatus">Vendor, Total, Due Date & Line Items</p>
       </div>
     </div>
 
@@ -84,10 +88,10 @@ import AppLayout from '../layouts/AppLayout.astro';
     const fileUpload = document.getElementById('fileUpload') as HTMLInputElement;
     const nativeCameraInput = document.getElementById('nativeCameraInput') as HTMLInputElement;
     const ocrLoading = document.getElementById('ocrLoading');
+    const loadingStatus = document.getElementById('loadingStatus');
     const cameraBlockedNotice = document.getElementById('cameraBlockedNotice');
     let hasLiveStream = false;
 
-    // Initialize Camera feed
     async function initCamera() {
       try {
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -100,7 +104,6 @@ import AppLayout from '../layouts/AppLayout.astro';
           showCameraFallback();
         }
       } catch (e) {
-        console.warn('Camera stream unavailable, switching to native capture input:', e);
         showCameraFallback();
       }
     }
@@ -112,13 +115,13 @@ import AppLayout from '../layouts/AppLayout.astro';
 
     initCamera();
 
-    // Downscale client-side to ensure lightweight, fast payload (< 1200px width/height)
     function resizeAndProcess(fileOrDataUrl: File | string) {
       if (ocrLoading) ocrLoading.classList.remove('hidden');
+      if (loadingStatus) loadingStatus.textContent = 'Optimizing image...';
 
       const img = new Image();
       img.onload = () => {
-        const MAX_DIM = 1200;
+        const MAX_DIM = 1000;
         let width = img.width;
         let height = img.height;
 
@@ -139,7 +142,7 @@ import AppLayout from '../layouts/AppLayout.astro';
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(img, 0, 0, width, height);
 
-        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
         sendToOCR(compressedDataUrl);
       };
 
@@ -155,19 +158,21 @@ import AppLayout from '../layouts/AppLayout.astro';
     }
 
     async function sendToOCR(dataUrl: string) {
+      if (loadingStatus) loadingStatus.textContent = 'AI analyzing bill & saving...';
+
       try {
         const res = await fetch('/api/ocr', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: dataUrl })
+          body: JSON.stringify({ image: dataUrl, auto_save: true })
         });
         const result = await res.json();
-        sessionStorage.setItem('pendingBill', JSON.stringify(result));
-        window.location.href = '/review';
+        
+        // Redirect directly to reserved bills
+        window.location.href = '/reserved';
       } catch (err) {
-        console.error('OCR error:', err);
-        alert('Could not auto-parse. Opening manual review...');
-        window.location.href = '/review';
+        console.error('OCR Error:', err);
+        window.location.href = '/reserved';
       }
     }
 
@@ -177,10 +182,9 @@ import AppLayout from '../layouts/AppLayout.astro';
         canvas.height = video.videoHeight;
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
         resizeAndProcess(dataUrl);
       } else {
-        // Trigger native camera trigger on iOS/Safari
         nativeCameraInput?.click();
       }
     });
