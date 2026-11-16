@@ -4,12 +4,17 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  "pages_build_output_dir": "dist",
+  "kv_namespaces": [
+    {
+      "binding": "SESSION",
+      "id": "dc8f21ad84ce4d9aa29cfeb7dfd5c107"
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "snapbill-db",
-      "database_id": "local"
+      "database_id": "202cdb82-2666-430b-9921-bf8a7938446a"
     }
   ],
   "ai": {
