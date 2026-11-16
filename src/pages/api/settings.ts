@@ -1,10 +1,11 @@
 import type { APIRoute } from 'astro';
+import { getCloudflareBindings } from '../../lib/db';
 
-export const POST: APIRoute = async ({ request, locals }) => {
+export const POST: APIRoute = async ({ request }) => {
   try {
     const { monthly_limit, current_spent } = await request.json();
-    // @ts-ignore
-    const db = locals?.runtime?.env?.DB;
+    const env = await getCloudflareBindings();
+    const db = env?.DB;
     if (db) {
       await db.prepare(
         "UPDATE budget_settings SET monthly_limit = ?, current_spent = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1"

@@ -1,8 +1,9 @@
 ---
 import AppLayout from '../layouts/AppLayout.astro';
+import { getCloudflareBindings } from '../lib/db';
 
-// @ts-ignore
-const db = Astro.locals?.runtime?.env?.DB;
+const env = await getCloudflareBindings();
+const db = env?.DB;
 
 let remainingToSpend = 0.00;
 let totalLimit = 0.00;

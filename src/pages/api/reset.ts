@@ -1,9 +1,10 @@
 import type { APIRoute } from 'astro';
+import { getCloudflareBindings } from '../../lib/db';
 
-export const POST: APIRoute = async ({ locals }) => {
+export const POST: APIRoute = async () => {
   try {
-    // @ts-ignore
-    const db = locals?.runtime?.env?.DB;
+    const env = await getCloudflareBindings();
+    const db = env?.DB;
     if (db) {
       await db.prepare("DELETE FROM bills").run();
       await db.prepare("UPDATE budget_settings SET monthly_income = 0, monthly_limit = 0, current_spent = 0 WHERE id = 1").run();

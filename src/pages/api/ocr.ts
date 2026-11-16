@@ -1,13 +1,12 @@
 import type { APIRoute } from 'astro';
+import { getCloudflareBindings } from '../../lib/db';
 
-export const POST: APIRoute = async ({ request, locals }) => {
+export const POST: APIRoute = async ({ request }) => {
   try {
     const body = await request.json();
     const base64Image = body.image || '';
 
-    // Check if Cloudflare Workers AI is available in current runtime environment
-    // @ts-ignore
-    const env = locals?.runtime?.env;
+    const env = await getCloudflareBindings();
 
     if (env?.AI && base64Image) {
       try {

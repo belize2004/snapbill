@@ -1,12 +1,13 @@
 import type { APIRoute } from 'astro';
+import { getCloudflareBindings } from '../../lib/db';
 
-export const POST: APIRoute = async ({ request, locals }) => {
+export const POST: APIRoute = async ({ request }) => {
   try {
     const data = await request.json();
     const { merchant, amount, category, due_date, status = 'reserved' } = data;
 
-    // @ts-ignore
-    const db = locals?.runtime?.env?.DB;
+    const env = await getCloudflareBindings();
+    const db = env?.DB;
 
     if (db) {
       const id = 'bill-' + Date.now();
