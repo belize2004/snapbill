@@ -1,14 +1,21 @@
 ---
 import AppLayout from '../layouts/AppLayout.astro';
 
-const reservedBills = [
-  { id: '1', merchant: 'Con Edison', amount: 112.40, category: 'Utilities', dueDate: 'Nov 1, 2026', icon: 'power', status: 'Reserved' },
-  { id: '2', merchant: 'Apple Services', amount: 14.99, category: 'Subscriptions', dueDate: 'Nov 5, 2026', icon: 'subscriptions', status: 'Reserved' },
-  { id: '3', merchant: 'State Farm Insurance', amount: 185.00, category: 'Insurance', dueDate: 'Nov 12, 2026', icon: 'policy', status: 'Reserved' },
-  { id: '4', merchant: 'Verizon Wireless', amount: 137.61, category: 'Telecom', dueDate: 'Nov 15, 2026', icon: 'phone_iphone', status: 'Reserved' }
-];
+// @ts-ignore
+const db = Astro.locals?.runtime?.env?.DB;
 
-const totalReserved = reservedBills.reduce((acc, b) => acc + b.amount, 0);
+let reservedBills: any[] = [];
+let totalReserved = 0.00;
+
+if (db) {
+  try {
+    const res = await db.prepare("SELECT * FROM bills WHERE status = 'reserved' ORDER BY due_date ASC").all();
+    reservedBills = res.results || [];
+    totalReserved = reservedBills.reduce((acc: number, b: any) => acc + Number(b.amount || 0), 0);
+  } catch (e) {
+    console.error("D1 Error:", e);
+  }
+}
 ---
 
 <AppLayout title="Reserved Bills" activeTab="reserved">
@@ -44,7 +51,7 @@ const totalReserved = reservedBills.reduce((acc, b) => acc + b.amount, 0);
         </div>
         <div class="h-7 px-2.5 rounded-full bg-[#72fe88]/30 flex items-center gap-1 text-[#006e28] text-xs font-medium">
           <span class="material-symbols-outlined text-[14px]">shield</span>
-          <span>100% Protected</span>
+          <span>{reservedBills.length > 0 ? '100% Protected' : 'No Bills'}</span>
         </div>
       </div>
       <p class="text-xs text-[#717786]">
@@ -55,37 +62,53 @@ const totalReserved = reservedBills.reduce((acc, b) => acc + b.amount, 0);
     <!-- Segmented Tabs (Apple HIG Segmented Control) -->
     <div class="flex bg-[#eeedf3] p-1 rounded-2xl">
       <button class="flex-1 py-1.5 text-xs font-semibold rounded-xl bg-white text-[#1a1b1f] shadow-sm">
-        Pending (4)
+        Pending ({reservedBills.length})
       </button>
       <button class="flex-1 py-1.5 text-xs font-semibold rounded-xl text-[#717786] hover:text-[#1a1b1f]">
-        Settled & Paid
+        Settled & Paid (0)
       </button>
     </div>
 
     <!-- Reserved Inset List -->
-    <div class="bg-white rounded-2xl shadow-sm overflow-hidden divide-y divide-[#e3e2e7]/60 border border-[#e3e2e7]/60">
-      {reservedBills.map((bill) => (
-        <div class="flex items-center justify-between px-4 py-3.5 active:bg-[#f4f3f8] transition-colors cursor-pointer">
-          <div class="flex items-center gap-3 min-w-0">
-            <div class="w-10 h-10 rounded-xl bg-[#eeedf3] flex items-center justify-center text-[#414755] shrink-0">
-              <span class="material-symbols-outlined text-[20px]">{bill.icon}</span>
-            </div>
-            <div class="min-w-0">
-              <div class="flex items-center gap-1.5">
-                <span class="text-sm font-semibold text-[#1a1b1f] truncate">{bill.merchant}</span>
-                <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-[#72fe88]/25 text-[#006e28] text-[10px] font-semibold">
-                  Funded
-                </span>
-              </div>
-              <span class="text-xs text-[#717786] block mt-0.5">Due {bill.dueDate}</span>
-            </div>
-          </div>
-          <div class="flex items-center gap-2 shrink-0 ml-3">
-            <span class="text-sm font-semibold text-[#1a1b1f] tabular-nums">${bill.amount.toFixed(2)}</span>
-            <span class="material-symbols-outlined text-[#717786] text-[16px]">chevron_right</span>
-          </div>
+    {reservedBills.length === 0 ? (
+      <div class="bg-white rounded-2xl shadow-sm border border-[#e3e2e7]/60 p-8 text-center space-y-3">
+        <div class="w-12 h-12 rounded-full bg-[#eeedf3] flex items-center justify-center text-[#717786] mx-auto">
+          <span class="material-symbols-outlined text-[24px]">receipt_long</span>
         </div>
-      ))}
-    </div>
+        <div>
+          <h3 class="text-sm font-semibold text-[#1a1b1f]">No bills added yet</h3>
+          <p class="text-xs text-[#717786] mt-0.5">Add your first bill manually or scan a receipt to ring-fence funds.</p>
+        </div>
+        <a href="/add" class="inline-flex items-center gap-1 bg-[#007aff] text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm active:scale-95 transition-transform">
+          <span class="material-symbols-outlined text-[16px]">add</span>
+          Add First Bill
+        </a>
+      </div>
+    ) : (
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden divide-y divide-[#e3e2e7]/60 border border-[#e3e2e7]/60">
+        {reservedBills.map((bill: any) => (
+          <div class="flex items-center justify-between px-4 py-3.5 active:bg-[#f4f3f8] transition-colors cursor-pointer">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-10 h-10 rounded-xl bg-[#eeedf3] flex items-center justify-center text-[#414755] shrink-0">
+                <span class="material-symbols-outlined text-[20px]">calendar_month</span>
+              </div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-sm font-semibold text-[#1a1b1f] truncate">{bill.merchant}</span>
+                  <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-[#72fe88]/25 text-[#006e28] text-[10px] font-semibold">
+                    Funded
+                  </span>
+                </div>
+                <span class="text-xs text-[#717786] block mt-0.5">Due {bill.due_date} · {bill.category}</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0 ml-3">
+              <span class="text-sm font-semibold text-[#1a1b1f] tabular-nums">${Number(bill.amount).toFixed(2)}</span>
+              <span class="material-symbols-outlined text-[#717786] text-[16px]">chevron_right</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
   </div>
 </AppLayout>
