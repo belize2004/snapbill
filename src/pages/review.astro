@@ -16,6 +16,12 @@ import AppLayout from '../layouts/AppLayout.astro';
       </button>
     </div>
 
+    <!-- Notice / Error Banner -->
+    <div id="ocrStatusNotice" class="hidden p-3.5 bg-amber-50 border border-amber-200/80 rounded-2xl flex items-center gap-2.5 text-xs text-amber-800">
+      <span class="material-symbols-outlined text-[18px] text-amber-600">info</span>
+      <span id="ocrStatusNoticeText">AI couldn't confidently read all fields. Please confirm details below.</span>
+    </div>
+
     <!-- Scanned Bill Status Card -->
     <div class="bg-white rounded-3xl p-5 shadow-sm border border-[#e3e2e7]/60 space-y-4">
       <div class="flex items-center gap-3">
@@ -87,12 +93,21 @@ import AppLayout from '../layouts/AppLayout.astro';
       const pendingRaw = sessionStorage.getItem('pendingBill');
       if (pendingRaw) {
         const bill = JSON.parse(pendingRaw);
+        if (bill.error) {
+          const notice = document.getElementById('ocrStatusNotice');
+          const noticeText = document.getElementById('ocrStatusNoticeText');
+          if (notice) notice.classList.remove('hidden');
+          if (noticeText) noticeText.textContent = 'Camera image was unclear or low light. Please confirm vendor & amount:';
+        }
+
         if (bill.merchant) {
           (document.getElementById('merchantInput') as HTMLInputElement).value = bill.merchant;
           const display = document.getElementById('displayMerchant');
           if (display) display.textContent = bill.merchant;
         }
-        if (bill.amount) (document.getElementById('amountInput') as HTMLInputElement).value = String(bill.amount);
+        if (bill.amount !== null && bill.amount !== undefined && !isNaN(bill.amount) && bill.amount > 0) {
+          (document.getElementById('amountInput') as HTMLInputElement).value = String(bill.amount);
+        }
         if (bill.due_date) (document.getElementById('dueDateInput') as HTMLInputElement).value = bill.due_date;
         if (bill.category) (document.getElementById('categoryInput') as HTMLSelectElement).value = bill.category;
       }

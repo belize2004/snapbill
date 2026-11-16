@@ -115,37 +115,41 @@ import AppLayout from '../layouts/AppLayout.astro';
 
     initCamera();
 
-    function processFile(file: File) {
+    function compressAndSend(source: CanvasImageSource, srcWidth: number, srcHeight: number) {
       if (ocrLoading) ocrLoading.classList.remove('hidden');
       if (loadingStatus) loadingStatus.textContent = 'Optimizing image...';
 
+      const MAX_DIM = 900;
+      let width = srcWidth;
+      let height = srcHeight;
+
+      if (width > height) {
+        if (width > MAX_DIM) {
+          height = Math.round((height * MAX_DIM) / width);
+          width = MAX_DIM;
+        }
+      } else {
+        if (height > MAX_DIM) {
+          width = Math.round((width * MAX_DIM) / height);
+          height = MAX_DIM;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(source, 0, 0, width, height);
+
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      sendToOCR(compressedDataUrl);
+    }
+
+    function processFile(file: File) {
       const reader = new FileReader();
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-          const MAX_DIM = 1000;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height) {
-            if (width > MAX_DIM) {
-              height = Math.round((height * MAX_DIM) / width);
-              width = MAX_DIM;
-            }
-          } else {
-            if (height > MAX_DIM) {
-              width = Math.round((width * MAX_DIM) / height);
-              height = MAX_DIM;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
-
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-          sendToOCR(compressedDataUrl);
+          compressAndSend(img, img.width, img.height);
         };
         img.src = e.target?.result as string;
       };
@@ -153,7 +157,7 @@ import AppLayout from '../layouts/AppLayout.astro';
     }
 
     async function sendToOCR(dataUrl: string) {
-      if (loadingStatus) loadingStatus.textContent = 'AI reading vendor & amount...';
+      if (loadingStatus) loadingStatus.textContent = 'AI extracting vendor & amount...';
 
       try {
         const res = await fetch('/api/ocr', {
@@ -164,8 +168,9 @@ import AppLayout from '../layouts/AppLayout.astro';
         const result = await res.json();
         sessionStorage.setItem('pendingBill', JSON.stringify(result));
         window.location.href = '/review';
-      } catch (err) {
+      } catch (err: any) {
         console.error('OCR Error:', err);
+        sessionStorage.setItem('pendingBill', JSON.stringify({ error: 'OCR connection failed' }));
         window.location.href = '/review';
       }
     }
@@ -174,14 +179,7 @@ import AppLayout from '../layouts/AppLayout.astro';
     captureBtnLabel?.addEventListener('click', (e) => {
       if (hasLiveStream && video.videoWidth > 0) {
         e.preventDefault();
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        
-        if (ocrLoading) ocrLoading.classList.remove('hidden');
-        sendToOCR(dataUrl);
+        compressAndSend(video, video.videoWidth, video.videoHeight);
       }
     });
 
