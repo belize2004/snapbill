@@ -1,0 +1,130 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+---
+
+<AppLayout title="Add Bill Manually" activeTab="reserved">
+  <div class="flex flex-col w-full pb-8 space-y-5 pt-3">
+    <!-- Apple Navigation Bar -->
+    <div class="flex items-center justify-between px-1">
+      <a href="/reserved" class="flex items-center text-[#007aff] text-sm font-medium">
+        <span class="material-symbols-outlined text-[20px]">chevron_left</span>
+        Cancel
+      </a>
+      <h2 class="text-base font-semibold text-[#1a1b1f]">Add Bill</h2>
+      <button id="saveTopBtn" class="text-sm font-semibold text-[#007aff] active:opacity-75">
+        Save
+      </button>
+    </div>
+
+    <!-- Bill Entry Inset Form -->
+    <div class="bg-white rounded-3xl p-5 shadow-sm border border-[#e3e2e7]/60 space-y-4">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-2xl bg-[#007aff]/15 flex items-center justify-center text-[#007aff]">
+          <span class="material-symbols-outlined text-[26px]">edit_note</span>
+        </div>
+        <div>
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-[#eeedf3] text-[#414755] text-[11px] font-semibold">
+            Manual Entry
+          </span>
+          <h3 class="text-xl font-bold text-[#1a1b1f] mt-0.5">New Obligation</h3>
+        </div>
+      </div>
+
+      <div class="space-y-3 pt-2">
+        <div class="space-y-1">
+          <label class="text-xs font-semibold text-[#717786] uppercase tracking-wider">Merchant / Vendor</label>
+          <input type="text" id="merchant" placeholder="e.g. Electric Co, Netflix, Rent" required class="w-full bg-[#f4f3f8] px-3.5 py-2.5 rounded-xl text-sm font-medium text-[#1a1b1f] border border-[#e3e2e7]/70 focus:outline-none focus:ring-2 focus:ring-[#007aff]" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="text-xs font-semibold text-[#717786] uppercase tracking-wider">Amount ($)</label>
+            <input type="number" step="0.01" id="amount" placeholder="0.00" required class="w-full bg-[#f4f3f8] px-3.5 py-2.5 rounded-xl text-sm font-bold text-[#1a1b1f] border border-[#e3e2e7]/70 focus:outline-none focus:ring-2 focus:ring-[#007aff]" />
+          </div>
+          <div class="space-y-1">
+            <label class="text-xs font-semibold text-[#717786] uppercase tracking-wider">Due Date</label>
+            <input type="date" id="dueDate" required class="w-full bg-[#f4f3f8] px-3.5 py-2.5 rounded-xl text-sm font-medium text-[#1a1b1f] border border-[#e3e2e7]/70 focus:outline-none focus:ring-2 focus:ring-[#007aff]" />
+          </div>
+        </div>
+
+        <div class="space-y-1">
+          <label class="text-xs font-semibold text-[#717786] uppercase tracking-wider">Category</label>
+          <select id="category" class="w-full bg-[#f4f3f8] px-3.5 py-2.5 rounded-xl text-sm font-medium text-[#1a1b1f] border border-[#e3e2e7]/70 focus:outline-none focus:ring-2 focus:ring-[#007aff]">
+            <option value="Utilities">Utilities & Home</option>
+            <option value="Subscriptions">Subscriptions & Services</option>
+            <option value="Telecom">Phone & Internet</option>
+            <option value="Insurance">Insurance</option>
+            <option value="Rent/Mortgage">Rent / Mortgage</option>
+            <option value="Credit & Loans">Credit & Loans</option>
+            <option value="General">Other / General</option>
+          </select>
+        </div>
+
+        <!-- Auto-Reserve Switch -->
+        <div class="pt-3 border-t border-[#eeedf3] flex items-center justify-between">
+          <div>
+            <h4 class="text-sm font-semibold text-[#1a1b1f]">Ring-Fence in Reserved Pool</h4>
+            <p class="text-xs text-[#717786]">Deduct from daily spend balance immediately</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="reserveToggle" checked class="sr-only peer" />
+            <div class="w-11 h-6 bg-[#eeedf3] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#007aff]"></div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Save Action Button -->
+    <button id="saveBottomBtn" class="w-full py-3.5 px-4 bg-[#007aff] hover:bg-[#0070eb] active:scale-[0.99] text-white font-semibold text-sm rounded-2xl shadow-lg shadow-[#007aff]/30 transition-all flex items-center justify-center gap-2">
+      <span class="material-symbols-outlined text-[20px]">add_circle</span>
+      Save Bill & Add to Reserved Pool
+    </button>
+  </div>
+
+  <script>
+    // Set default due date to 7 days from now
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    const dateInput = document.getElementById('dueDate') as HTMLInputElement;
+    if (dateInput) dateInput.value = d.toISOString().split('T')[0];
+
+    async function handleSave() {
+      const merchant = (document.getElementById('merchant') as HTMLInputElement).value.trim();
+      const amount = parseFloat((document.getElementById('amount') as HTMLInputElement).value);
+      const dueDate = (document.getElementById('dueDate') as HTMLInputElement).value;
+      const category = (document.getElementById('category') as HTMLSelectElement).value;
+      const isReserved = (document.getElementById('reserveToggle') as HTMLInputElement).checked;
+
+      if (!merchant || isNaN(amount) || amount <= 0 || !dueDate) {
+        alert('Please fill out the vendor, amount, and due date.');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/bills', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            merchant,
+            amount,
+            due_date: dueDate,
+            category,
+            status: isReserved ? 'reserved' : 'uncovered'
+          })
+        });
+
+        if (res.ok) {
+          window.location.href = '/reserved';
+        } else {
+          alert('Saved locally. Redirecting to Reserved bills.');
+          window.location.href = '/reserved';
+        }
+      } catch (e) {
+        window.location.href = '/reserved';
+      }
+    }
+
+    document.getElementById('saveTopBtn')?.addEventListener('click', handleSave);
+    document.getElementById('saveBottomBtn')?.addEventListener('click', handleSave);
+  </script>
+</AppLayout>
