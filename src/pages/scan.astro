@@ -58,21 +58,21 @@ import AppLayout from '../layouts/AppLayout.astro';
       </div>
     </div>
 
-    <!-- Hidden Native Mobile Camera Input -->
+    <!-- Hidden Native Mobile Inputs -->
     <input type="file" id="nativeCameraInput" accept="image/*" capture="environment" class="hidden" />
     <input type="file" id="fileUpload" accept="image/*" class="hidden" />
 
     <!-- Shutter Controls & Photo Upload Fallback -->
     <div class="flex items-center justify-around px-6 py-4 bg-white/80 backdrop-blur-xl rounded-3xl border border-[#e3e2e7]/60 shadow-sm">
       <!-- Photo Library Picker -->
-      <label for="fileUpload" class="w-12 h-12 rounded-full bg-[#f4f3f8] flex items-center justify-center text-[#1a1b1f] cursor-pointer active:scale-95 transition-transform">
+      <button type="button" id="galleryBtn" class="w-12 h-12 rounded-full bg-[#f4f3f8] flex items-center justify-center text-[#1a1b1f] active:scale-95 transition-transform">
         <span class="material-symbols-outlined text-[24px]">photo_library</span>
-      </label>
+      </button>
 
-      <!-- Primary Shutter Button (Labels trigger file chooser reliably on iOS) -->
-      <label for="nativeCameraInput" id="captureBtnLabel" class="w-18 h-18 rounded-full border-4 border-[#007aff] p-1 flex items-center justify-center active:scale-90 transition-transform cursor-pointer">
+      <!-- Primary Shutter Button -->
+      <button type="button" id="shutterBtn" class="w-18 h-18 rounded-full border-4 border-[#007aff] p-1 flex items-center justify-center active:scale-90 transition-transform">
         <div class="w-14 h-14 rounded-full bg-[#007aff] shadow-md"></div>
-      </label>
+      </button>
 
       <!-- Manual Add Shortcut -->
       <a href="/add" class="w-12 h-12 rounded-full bg-[#f4f3f8] flex items-center justify-center text-[#007aff] active:scale-95 transition-transform">
@@ -84,7 +84,8 @@ import AppLayout from '../layouts/AppLayout.astro';
   <script>
     const video = document.getElementById('cameraFeed') as HTMLVideoElement;
     const canvas = document.getElementById('photoCanvas') as HTMLCanvasElement;
-    const captureBtnLabel = document.getElementById('captureBtnLabel');
+    const shutterBtn = document.getElementById('shutterBtn') as HTMLButtonElement;
+    const galleryBtn = document.getElementById('galleryBtn') as HTMLButtonElement;
     const fileUpload = document.getElementById('fileUpload') as HTMLInputElement;
     const nativeCameraInput = document.getElementById('nativeCameraInput') as HTMLInputElement;
     const ocrLoading = document.getElementById('ocrLoading');
@@ -96,7 +97,8 @@ import AppLayout from '../layouts/AppLayout.astro';
       try {
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
           const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: 'environment' } }
+            video: { facingMode: { ideal: 'environment' } },
+            audio: false
           });
           video.srcObject = stream;
           hasLiveStream = true;
@@ -145,6 +147,9 @@ import AppLayout from '../layouts/AppLayout.astro';
     }
 
     function processFile(file: File) {
+      if (ocrLoading) ocrLoading.classList.remove('hidden');
+      if (loadingStatus) loadingStatus.textContent = 'Reading photo...';
+
       const reader = new FileReader();
       reader.onload = (e) => {
         const img = new Image();
@@ -175,12 +180,22 @@ import AppLayout from '../layouts/AppLayout.astro';
       }
     }
 
-    // Capture from live video if active, otherwise label triggers native camera input
-    captureBtnLabel?.addEventListener('click', (e) => {
+    // Shutter button behavior
+    shutterBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      // If live camera is actively streaming, snap immediately
       if (hasLiveStream && video.videoWidth > 0) {
-        e.preventDefault();
         compressAndSend(video, video.videoWidth, video.videoHeight);
+      } else {
+        // Fallback to native mobile camera capture
+        nativeCameraInput?.click();
       }
+    });
+
+    // Gallery button behavior
+    galleryBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      fileUpload?.click();
     });
 
     nativeCameraInput?.addEventListener('change', (e) => {
