@@ -28,7 +28,7 @@ import AppLayout from '../layouts/AppLayout.astro';
         <div>
           <h3 class="text-base font-bold">Snap or Upload Bill</h3>
           <p class="text-xs text-white/70 max-w-xs mt-1">
-            Tap the shutter button below to take a photo, or choose an invoice from your library.
+            Tap the blue button below to snap a photo or upload an image.
           </p>
         </div>
       </div>
@@ -69,10 +69,10 @@ import AppLayout from '../layouts/AppLayout.astro';
         <span class="material-symbols-outlined text-[24px]">photo_library</span>
       </label>
 
-      <!-- Primary Shutter Button -->
-      <button id="captureBtn" class="w-18 h-18 rounded-full border-4 border-[#007aff] p-1 flex items-center justify-center active:scale-90 transition-transform">
+      <!-- Primary Shutter Button (Labels trigger file chooser reliably on iOS) -->
+      <label for="nativeCameraInput" id="captureBtnLabel" class="w-18 h-18 rounded-full border-4 border-[#007aff] p-1 flex items-center justify-center active:scale-90 transition-transform cursor-pointer">
         <div class="w-14 h-14 rounded-full bg-[#007aff] shadow-md"></div>
-      </button>
+      </label>
 
       <!-- Manual Add Shortcut -->
       <a href="/add" class="w-12 h-12 rounded-full bg-[#f4f3f8] flex items-center justify-center text-[#007aff] active:scale-95 transition-transform">
@@ -84,7 +84,7 @@ import AppLayout from '../layouts/AppLayout.astro';
   <script>
     const video = document.getElementById('cameraFeed') as HTMLVideoElement;
     const canvas = document.getElementById('photoCanvas') as HTMLCanvasElement;
-    const captureBtn = document.getElementById('captureBtn');
+    const captureBtnLabel = document.getElementById('captureBtnLabel');
     const fileUpload = document.getElementById('fileUpload') as HTMLInputElement;
     const nativeCameraInput = document.getElementById('nativeCameraInput') as HTMLInputElement;
     const ocrLoading = document.getElementById('ocrLoading');
@@ -115,46 +115,41 @@ import AppLayout from '../layouts/AppLayout.astro';
 
     initCamera();
 
-    function resizeAndProcess(fileOrDataUrl: File | string) {
+    function processFile(file: File) {
       if (ocrLoading) ocrLoading.classList.remove('hidden');
       if (loadingStatus) loadingStatus.textContent = 'Optimizing image...';
 
-      const img = new Image();
-      img.onload = () => {
-        const MAX_DIM = 1000;
-        let width = img.width;
-        let height = img.height;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX_DIM = 1000;
+          let width = img.width;
+          let height = img.height;
 
-        if (width > height) {
-          if (width > MAX_DIM) {
-            height = Math.round((height * MAX_DIM) / width);
-            width = MAX_DIM;
+          if (width > height) {
+            if (width > MAX_DIM) {
+              height = Math.round((height * MAX_DIM) / width);
+              width = MAX_DIM;
+            }
+          } else {
+            if (height > MAX_DIM) {
+              width = Math.round((width * MAX_DIM) / height);
+              height = MAX_DIM;
+            }
           }
-        } else {
-          if (height > MAX_DIM) {
-            width = Math.round((width * MAX_DIM) / height);
-            height = MAX_DIM;
-          }
-        }
 
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
 
-        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        sendToOCR(compressedDataUrl);
-      };
-
-      if (typeof fileOrDataUrl === 'string') {
-        img.src = fileOrDataUrl;
-      } else {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          img.src = e.target?.result as string;
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          sendToOCR(compressedDataUrl);
         };
-        reader.readAsDataURL(fileOrDataUrl);
-      }
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
     }
 
     async function sendToOCR(dataUrl: string) {
@@ -167,8 +162,6 @@ import AppLayout from '../layouts/AppLayout.astro';
           body: JSON.stringify({ image: dataUrl })
         });
         const result = await res.json();
-        
-        // Save extracted bill to sessionStorage and open review screen
         sessionStorage.setItem('pendingBill', JSON.stringify(result));
         window.location.href = '/review';
       } catch (err) {
@@ -177,27 +170,29 @@ import AppLayout from '../layouts/AppLayout.astro';
       }
     }
 
-    captureBtn?.addEventListener('click', () => {
+    // Capture from live video if active, otherwise label triggers native camera input
+    captureBtnLabel?.addEventListener('click', (e) => {
       if (hasLiveStream && video.videoWidth > 0) {
+        e.preventDefault();
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        resizeAndProcess(dataUrl);
-      } else {
-        nativeCameraInput?.click();
+        
+        if (ocrLoading) ocrLoading.classList.remove('hidden');
+        sendToOCR(dataUrl);
       }
     });
 
     nativeCameraInput?.addEventListener('change', (e) => {
       const file = (e.target as HTMLInputElement)?.files?.[0];
-      if (file) resizeAndProcess(file);
+      if (file) processFile(file);
     });
 
     fileUpload?.addEventListener('change', (e) => {
       const file = (e.target as HTMLInputElement)?.files?.[0];
-      if (file) resizeAndProcess(file);
+      if (file) processFile(file);
     });
   </script>
 </AppLayout>
