@@ -7,9 +7,9 @@ export const POST: APIRoute = async ({ request }) => {
     const base64Image = body.image || '';
 
     const env = await getCloudflareBindings();
-    let merchant = "Duke Energy";
-    let amount = 112.40;
-    let category = "Utilities";
+    let merchant = "";
+    let amount = 0;
+    let category = "General";
     let dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + 14);
     let dueDateStr = dueDate.toISOString().split('T')[0];
