@@ -10,48 +10,55 @@ export const POST: APIRoute = async ({ request }) => {
 
     if (env?.AI && base64Image) {
       try {
-        // Strip data:image/...;base64, prefix
         const rawBase64 = base64Image.replace(/^data:image\/\w+;base64,/, '');
         const binary = Uint8Array.from(atob(rawBase64), c => c.charCodeAt(0));
 
         const aiResponse = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
           image: [...binary],
-          prompt: `Analyze this bill or receipt image. Return ONLY valid JSON with keys:
-          - "merchant" (string)
-          - "amount" (number)
-          - "category" (one of: "Utilities", "Subscriptions", "Telecom", "Health", "Food", "General")
-          - "due_date" (string in YYYY-MM-DD format, or today's date if not a bill)
-          - "is_bill" (boolean)
-          - "notes" (brief summary)
-          No markdown backticks, no prose.`
+          prompt: `You are an expert document OCR model. Look closely at this bill, receipt, or invoice photo.
+Extract and return ONLY a valid raw JSON object with these exact keys:
+- "merchant": name of the company, service, or vendor (e.g. "Duke Energy", "Netflix", "Whole Foods")
+- "amount": total amount due or paid as a numeric float (e.g. 84.50)
+- "category": choose the closest from ["Utilities", "Subscriptions", "Telecom", "Insurance", "Rent/Mortgage", "Health", "Food", "General"]
+- "due_date": due date in YYYY-MM-DD format (if no due date is found, use the statement date or today)
+- "is_bill": true if recurring bill, false if one-off receipt
+- "notes": short 1-sentence description
+
+Return ONLY JSON. Do not wrap in markdown or backticks.`
         });
 
-        const parsed = JSON.parse(aiResponse.response || '{}');
-        return new Response(JSON.stringify(parsed), {
-          headers: { 'Content-Type': 'application/json' }
-        });
+        let text = aiResponse?.response || '';
+        // Strip markdown backticks if AI included them
+        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          return new Response(JSON.stringify(parsed), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
       } catch (aiErr) {
-        console.warn('Workers AI vision parsing fallback triggered:', aiErr);
+        console.warn('Workers AI vision parsing error, falling back:', aiErr);
       }
     }
 
-    // Default high-accuracy simulation if testing locally without Cloudflare AI binding
-    const simulatedResult = {
-      merchant: "Con Edison",
-      amount: 112.40,
-      category: "Utilities",
-      due_date: "2026-11-28",
+    // Fallback if image was unclear
+    const fallback = {
+      merchant: "Scanned Receipt",
+      amount: 0.00,
+      category: "General",
+      due_date: new Date().toISOString().split('T')[0],
       is_bill: true,
-      account_number: "•••4892",
-      notes: "Electric & Gas utility invoice parsed via Cloudflare Workers AI OCR."
+      notes: "Photo processed. Review vendor and amount."
     };
 
-    return new Response(JSON.stringify(simulatedResult), {
+    return new Response(JSON.stringify(fallback), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
-  } catch (error) {
-    return new Response(JSON.stringify({ error: 'Failed to process image' }), {
+  } catch (error: any) {
+    return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });
