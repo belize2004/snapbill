@@ -1,0 +1,69 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+---
+
+<AppLayout title="Insights & Budgets" activeTab="insights">
+  <div class="flex flex-col w-full pb-8 space-y-5 pt-3">
+    <!-- Header -->
+    <div class="px-1">
+      <span class="text-xs font-semibold text-[#717786] uppercase tracking-wider block mb-0.5">Trends & Predictability</span>
+      <h1 class="text-3xl font-bold tracking-tight text-[#1a1b1f]">Insights</h1>
+    </div>
+
+    <!-- Monthly Predictability Score Card -->
+    <div class="bg-white rounded-3xl p-5 shadow-sm border border-[#e3e2e7]/60 space-y-3">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-xs text-[#717786] font-medium block">Bill Predictability Score</span>
+          <h2 class="text-2xl font-bold text-[#1a1b1f] mt-0.5">94% Stable</h2>
+        </div>
+        <div class="w-12 h-12 rounded-2xl bg-[#72fe88]/20 flex items-center justify-center text-[#006e28]">
+          <span class="material-symbols-outlined text-[26px]">trending_up</span>
+        </div>
+      </div>
+      <p class="text-xs text-[#717786]">
+        Your recurring bills represent 28% of your total budget. All upcoming payments for the next 3 weeks are fully reserved.
+      </p>
+    </div>
+
+    <!-- Category Breakdown Bars -->
+    <div class="space-y-2 pt-1">
+      <span class="text-xs font-semibold text-[#717786] uppercase tracking-wider px-1">Fixed Obligations Breakdown</span>
+
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-[#e3e2e7]/60 space-y-4">
+        <!-- Utilities -->
+        <div class="space-y-1.5">
+          <div class="flex justify-between text-xs font-medium">
+            <span class="text-[#1a1b1f]">Utilities & Home</span>
+            <span class="text-[#717786] tabular-nums">$112.40 / mo</span>
+          </div>
+          <div class="h-2 w-full bg-[#eeedf3] rounded-full overflow-hidden">
+            <div class="h-full bg-[#007aff] rounded-full" style="width: 25%;"></div>
+          </div>
+        </div>
+
+        <!-- Insurance -->
+        <div class="space-y-1.5">
+          <div class="flex justify-between text-xs font-medium">
+            <span class="text-[#1a1b1f]">Insurance</span>
+            <span class="text-[#717786] tabular-nums">$185.00 / mo</span>
+          </div>
+          <div class="h-2 w-full bg-[#eeedf3] rounded-full overflow-hidden">
+            <div class="h-full bg-[#006e28] rounded-full" style="width: 41%;"></div>
+          </div>
+        </div>
+
+        <!-- Telecom & Subscriptions -->
+        <div class="space-y-1.5">
+          <div class="flex justify-between text-xs font-medium">
+            <span class="text-[#1a1b1f]">Subscriptions & Mobile</span>
+            <span class="text-[#717786] tabular-nums">$152.60 / mo</span>
+          </div>
+          <div class="h-2 w-full bg-[#eeedf3] rounded-full overflow-hidden">
+            <div class="h-full bg-[#5856d6] rounded-full" style="width: 34%;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</AppLayout>

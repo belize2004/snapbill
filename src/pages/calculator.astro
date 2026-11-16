@@ -1,0 +1,121 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+---
+
+<AppLayout title="Bill Coverage Calculator" activeTab="settings">
+  <div class="flex flex-col w-full pb-8 space-y-5 pt-3">
+    <!-- Header -->
+    <div class="px-1">
+      <span class="text-xs font-semibold text-[#717786] uppercase tracking-wider block mb-0.5">Automated Allocation</span>
+      <h1 class="text-3xl font-bold tracking-tight text-[#1a1b1f]">Coverage Plan</h1>
+    </div>
+
+    <!-- Live Coverage Slider Card -->
+    <div class="bg-white rounded-3xl p-5 shadow-sm border border-[#e3e2e7]/60 space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-xs text-[#717786] font-medium block">Coverage Period</span>
+          <h2 id="coverageDaysLabel" class="text-2xl font-bold text-[#1a1b1f] mt-0.5">Next 30 Days</h2>
+        </div>
+        <div class="text-right">
+          <span class="text-xs text-[#717786] font-medium block">Total Quarantined</span>
+          <span id="quarantinedAmount" class="text-2xl font-bold text-[#007aff] tabular-nums mt-0.5">$450.00</span>
+        </div>
+      </div>
+
+      <!-- Slider Control -->
+      <div class="space-y-2 pt-2">
+        <input type="range" id="coverageRange" min="7" max="60" value="30" step="1" class="w-full h-2 bg-[#eeedf3] rounded-lg appearance-none cursor-pointer accent-[#007aff]" />
+        <div class="flex justify-between text-[11px] font-semibold text-[#717786]">
+          <span>7 Days</span>
+          <span>15 Days</span>
+          <span class="text-[#007aff]">30 Days</span>
+          <span>60 Days</span>
+        </div>
+      </div>
+
+      <div class="p-3.5 bg-[#f4f3f8] rounded-2xl flex items-center justify-between text-xs">
+        <span class="text-[#414755]">Daily Safe Spending Balance</span>
+        <span id="safeDaily" class="font-bold text-[#006e28] text-sm tabular-nums">$158.93 / day</span>
+      </div>
+    </div>
+
+    <!-- Bill Inclusion Checklist -->
+    <div class="space-y-2 pt-1">
+      <div class="flex items-center justify-between px-1">
+        <span class="text-xs font-semibold text-[#717786] uppercase tracking-wider">Covered in This Cycle</span>
+        <span class="text-xs text-[#007aff] font-medium">Auto-calculated</span>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm divide-y divide-[#e3e2e7]/60 border border-[#e3e2e7]/60">
+        <label class="flex items-center justify-between px-4 py-3 cursor-pointer">
+          <div class="flex items-center gap-3">
+            <input type="checkbox" checked class="w-5 h-5 rounded text-[#007aff] accent-[#007aff]" />
+            <div>
+              <span class="text-sm font-semibold text-[#1a1b1f] block">Con Edison</span>
+              <span class="text-xs text-[#717786]">Due in 4 days</span>
+            </div>
+          </div>
+          <span class="text-sm font-semibold text-[#1a1b1f] tabular-nums">$112.40</span>
+        </label>
+
+        <label class="flex items-center justify-between px-4 py-3 cursor-pointer">
+          <div class="flex items-center gap-3">
+            <input type="checkbox" checked class="w-5 h-5 rounded text-[#007aff] accent-[#007aff]" />
+            <div>
+              <span class="text-sm font-semibold text-[#1a1b1f] block">Apple Services</span>
+              <span class="text-xs text-[#717786]">Due in 8 days</span>
+            </div>
+          </div>
+          <span class="text-sm font-semibold text-[#1a1b1f] tabular-nums">$14.99</span>
+        </label>
+
+        <label class="flex items-center justify-between px-4 py-3 cursor-pointer">
+          <div class="flex items-center gap-3">
+            <input type="checkbox" checked class="w-5 h-5 rounded text-[#007aff] accent-[#007aff]" />
+            <div>
+              <span class="text-sm font-semibold text-[#1a1b1f] block">State Farm Insurance</span>
+              <span class="text-xs text-[#717786]">Due in 15 days</span>
+            </div>
+          </div>
+          <span class="text-sm font-semibold text-[#1a1b1f] tabular-nums">$185.00</span>
+        </label>
+
+        <label class="flex items-center justify-between px-4 py-3 cursor-pointer">
+          <div class="flex items-center gap-3">
+            <input type="checkbox" checked class="w-5 h-5 rounded text-[#007aff] accent-[#007aff]" />
+            <div>
+              <span class="text-sm font-semibold text-[#1a1b1f] block">Verizon Wireless</span>
+              <span class="text-xs text-[#717786]">Due in 18 days</span>
+            </div>
+          </div>
+          <span class="text-sm font-semibold text-[#1a1b1f] tabular-nums">$137.61</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const slider = document.getElementById('coverageRange') as HTMLInputElement;
+    const label = document.getElementById('coverageDaysLabel');
+    const amount = document.getElementById('quarantinedAmount');
+    const safeDaily = document.getElementById('safeDaily');
+
+    slider?.addEventListener('input', (e) => {
+      const days = parseInt((e.target as HTMLInputElement).value, 10);
+      if (label) label.textContent = `Next ${days} Days`;
+
+      // Dynamic calculation
+      let pool = 112.40 + 14.99;
+      if (days >= 15) pool += 185.00;
+      if (days >= 18) pool += 137.61;
+      if (days >= 35) pool += 260.00;
+
+      if (amount) amount.textContent = `$${pool.toFixed(2)}`;
+
+      const remainingSpend = 2480.50 - (pool - 450.00);
+      const daily = remainingSpend / days;
+      if (safeDaily) safeDaily.textContent = `$${Math.max(10, daily).toFixed(2)} / day`;
+    });
+  </script>
+</AppLayout>

@@ -1,0 +1,184 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+
+// In Cloudflare Workers environment, Astro.locals.runtime.env.DB provides D1 access
+// Providing fallback defaults for SSR / static preview
+const remainingToSpend = 2480.50;
+const totalLimit = 4200.00;
+const currentSpent = 1719.50;
+const safeDailySpend = 158.93;
+const reservedBillsTotal = 450.00;
+---
+
+<AppLayout title="Budget Overview" activeTab="budget">
+  <div class="flex flex-col w-full pb-8 space-y-5 pt-3">
+    <!-- Month Context & Large Apple Title -->
+    <div class="flex items-end justify-between px-1">
+      <div>
+        <span class="text-xs font-semibold text-[#717786] uppercase tracking-wider block mb-0.5">November 2026</span>
+        <h1 class="text-3xl font-bold tracking-tight text-[#1a1b1f]">Budget</h1>
+      </div>
+      <div class="flex items-center gap-1.5 bg-[#e9e7ed] px-3 py-1.5 rounded-full shadow-sm active:scale-95 transition-transform cursor-pointer">
+        <span class="material-symbols-outlined text-[#007aff] text-[18px]">tune</span>
+        <span class="text-xs font-medium text-[#007aff]">All Wallets</span>
+      </div>
+    </div>
+
+    <!-- Hero Inset Grouped Monthly Spending Card -->
+    <div class="bg-white rounded-3xl p-5 shadow-sm border border-[#e3e2e7]/60 space-y-4">
+      <div class="flex items-start justify-between">
+        <div>
+          <span class="text-xs text-[#717786] block font-medium">Remaining to Spend</span>
+          <div class="flex items-baseline gap-1 mt-1">
+            <span class="text-3xl font-bold tracking-tight text-[#1a1b1f] tabular-nums">
+              $2,480<span class="text-[#717786] text-xl font-normal">.50</span>
+            </span>
+          </div>
+        </div>
+        <div class="h-7 px-2.5 rounded-full bg-[#72fe88]/30 flex items-center gap-1 text-[#006e28] text-xs font-medium">
+          <span class="material-symbols-outlined text-[14px]">arrow_downward</span>
+          <span>59% left</span>
+        </div>
+      </div>
+
+      <div class="space-y-1.5">
+        <div class="h-2 w-full bg-[#eeedf3] rounded-full overflow-hidden">
+          <div class="h-full rounded-full bg-[#007aff] transition-all duration-700 ease-out" style="width: 41%;"></div>
+        </div>
+        <div class="flex justify-between items-center text-xs text-[#717786]">
+          <span class="tabular-nums font-medium">${currentSpent.toFixed(2)} spent</span>
+          <span class="tabular-nums font-medium">${totalLimit.toFixed(2)} limit</span>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-[#eeedf3] flex items-center justify-between">
+        <div class="flex items-start gap-2">
+          <span class="material-symbols-outlined text-[#006e28] text-[20px] shrink-0">check_circle</span>
+          <div>
+            <div class="text-xs text-[#1a1b1f] leading-tight">
+              <span class="font-bold tabular-nums">${safeDailySpend.toFixed(2)}</span>
+              <span class="text-[#717786]">safe daily spend</span>
+            </div>
+            <p class="text-[11px] text-[#717786] mt-0.5">
+              After ${reservedBillsTotal.toFixed(2)} reserved for upcoming bills
+            </p>
+          </div>
+        </div>
+        <span class="text-xs font-semibold text-[#007aff]">On Track</span>
+      </div>
+    </div>
+
+    <!-- Quick Action Cards: Reserved Pool & Camera Scan -->
+    <div class="space-y-3">
+      <!-- Reserved Card Link -->
+      <a href="/reserved" class="block group active:scale-[0.98] transition-transform">
+        <div class="rounded-2xl bg-white p-4 shadow-sm flex items-center justify-between border border-[#e3e2e7]/60">
+          <div class="flex items-center gap-3.5">
+            <div class="w-10 h-10 rounded-xl bg-[#72fe88]/20 flex items-center justify-center text-[#006e28] shrink-0">
+              <span class="material-symbols-outlined text-[22px]">shield</span>
+            </div>
+            <div>
+              <div class="flex items-center gap-1.5">
+                <h3 class="font-semibold text-sm text-[#1a1b1f] leading-tight">Reserved for Bills</h3>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-[#72fe88]/25 text-[#006e28] text-[10px] font-semibold">
+                  Protected
+                </span>
+              </div>
+              <p class="text-xs text-[#717786] mt-0.5">4 Bills Funded ($450.00) · Next: Con Ed Nov 1</p>
+            </div>
+          </div>
+          <div class="flex items-center text-[#007aff] text-xs font-semibold gap-0.5 shrink-0">
+            <span>Pool</span>
+            <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+          </div>
+        </div>
+      </a>
+
+      <!-- Snap Receipt Action -->
+      <a href="/scan" class="block group active:scale-[0.98] transition-transform">
+        <div class="rounded-2xl bg-white p-4 shadow-sm flex items-center justify-between border border-[#e3e2e7]/60">
+          <div class="flex items-center gap-3.5">
+            <div class="w-10 h-10 rounded-xl bg-[#007aff]/15 flex items-center justify-center text-[#007aff] shrink-0">
+              <span class="material-symbols-outlined text-[22px]">photo_camera</span>
+            </div>
+            <div>
+              <h3 class="font-semibold text-sm text-[#1a1b1f] leading-tight">Snap Bill or Receipt</h3>
+              <p class="text-xs text-[#717786] mt-0.5">Cloudflare Workers AI OCR & auto-category</p>
+            </div>
+          </div>
+          <span class="material-symbols-outlined text-[#717786] text-[20px]">chevron_right</span>
+        </div>
+      </a>
+    </div>
+
+    <!-- Recent Transactions Apple HIG Inset Grouped Section -->
+    <div class="space-y-2 pt-2">
+      <div class="flex items-center justify-between px-1">
+        <span class="text-xs font-semibold text-[#717786] uppercase tracking-wider">Recent Transactions</span>
+        <a href="#" class="text-xs font-semibold text-[#007aff] hover:underline flex items-center">
+          See All
+          <span class="material-symbols-outlined text-[16px] ml-0.5">chevron_right</span>
+        </a>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden divide-y divide-[#e3e2e7]/60 border border-[#e3e2e7]/60">
+        <!-- Item 1 -->
+        <div class="flex items-center justify-between px-4 py-3 active:bg-[#f4f3f8] transition-colors cursor-pointer">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-10 h-10 rounded-xl bg-[#72fe88]/20 flex items-center justify-center text-[#006e28] shrink-0">
+              <span class="material-symbols-outlined text-[20px]">shopping_basket</span>
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5">
+                <span class="text-sm font-semibold text-[#1a1b1f] truncate">Whole Foods Market</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-[#eeedf3] text-[#414755] text-[10px] font-semibold">OCR</span>
+              </div>
+              <span class="text-xs text-[#717786] block mt-0.5">Today, 2:15 PM</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0 ml-3">
+            <span class="text-sm font-semibold text-[#1a1b1f] tabular-nums">-$64.20</span>
+            <span class="material-symbols-outlined text-[#717786] text-[16px]">chevron_right</span>
+          </div>
+        </div>
+
+        <!-- Item 2 -->
+        <div class="flex items-center justify-between px-4 py-3 active:bg-[#f4f3f8] transition-colors cursor-pointer">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-10 h-10 rounded-xl bg-[#007aff]/15 flex items-center justify-center text-[#007aff] shrink-0">
+              <span class="material-symbols-outlined text-[20px]">local_cafe</span>
+            </div>
+            <div class="min-w-0">
+              <span class="text-sm font-semibold text-[#1a1b1f] truncate block">Blue Bottle Coffee</span>
+              <span class="text-xs text-[#717786] block mt-0.5">Today, 9:41 AM</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0 ml-3">
+            <span class="text-sm font-semibold text-[#1a1b1f] tabular-nums">-$7.85</span>
+            <span class="material-symbols-outlined text-[#717786] text-[16px]">chevron_right</span>
+          </div>
+        </div>
+
+        <!-- Item 3 -->
+        <div class="flex items-center justify-between px-4 py-3 active:bg-[#f4f3f8] transition-colors cursor-pointer">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-10 h-10 rounded-xl bg-[#eeedf3] flex items-center justify-center text-[#414755] shrink-0">
+              <span class="material-symbols-outlined text-[20px]">power</span>
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5">
+                <span class="text-sm font-semibold text-[#1a1b1f] truncate">Con Edison</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-[#72fe88]/25 text-[#006e28] text-[10px] font-semibold">Auto-Reserved</span>
+              </div>
+              <span class="text-xs text-[#717786] block mt-0.5">Scheduled · Nov 1</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0 ml-3">
+            <span class="text-sm font-semibold text-[#1a1b1f] tabular-nums">-$112.40</span>
+            <span class="material-symbols-outlined text-[#717786] text-[16px]">chevron_right</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</AppLayout>
