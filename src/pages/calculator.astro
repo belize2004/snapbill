@@ -28,7 +28,7 @@ if (db) {
   }
 }
 
-// Compute remaining spendable pool
+// Compute remaining spendable budget pool
 const spendablePool = Math.max(0, budgetSettings.monthly_limit - budgetSettings.current_spent);
 ---
 
@@ -53,21 +53,30 @@ const spendablePool = Math.max(0, budgetSettings.monthly_limit - budgetSettings.
         </div>
       </div>
 
-      <!-- Slider Control -->
+      <!-- Slider Control (min 1 day, max 60 days) -->
       <div class="space-y-2 pt-2">
-        <input type="range" id="coverageRange" min="7" max="60" value="30" step="1" class="w-full h-2 bg-[#eeedf3] rounded-lg appearance-none cursor-pointer accent-[#007aff]" />
-        <div class="flex justify-between text-[11px] font-semibold text-[#717786]">
-          <span class="slider-preset cursor-pointer hover:text-[#007aff]" data-days="7">7 Days</span>
-          <span class="slider-preset cursor-pointer hover:text-[#007aff]" data-days="15">15 Days</span>
-          <span class="slider-preset cursor-pointer text-[#007aff] font-bold" data-days="30">30 Days</span>
-          <span class="slider-preset cursor-pointer hover:text-[#007aff]" data-days="60">60 Days</span>
+        <input
+          type="range"
+          id="coverageRange"
+          min="1"
+          max="60"
+          value="30"
+          step="1"
+          class="w-full h-3 bg-[#eeedf3] rounded-lg appearance-none cursor-pointer accent-[#007aff]"
+        />
+        <div class="flex justify-between text-[11px] font-semibold text-[#717786] px-1">
+          <button type="button" class="slider-preset py-1 px-1.5 rounded hover:text-[#007aff]" data-days="3">3 Days</button>
+          <button type="button" class="slider-preset py-1 px-1.5 rounded hover:text-[#007aff]" data-days="7">7 Days</button>
+          <button type="button" class="slider-preset py-1 px-1.5 rounded hover:text-[#007aff]" data-days="14">14 Days</button>
+          <button type="button" class="slider-preset py-1 px-1.5 rounded hover:text-[#007aff] font-bold text-[#007aff]" data-days="30">30 Days</button>
+          <button type="button" class="slider-preset py-1 px-1.5 rounded hover:text-[#007aff]" data-days="60">60 Days</button>
         </div>
       </div>
 
       <div class="p-3.5 bg-[#f4f3f8] rounded-2xl flex items-center justify-between text-xs">
         <div>
           <span class="text-[#414755] block font-medium">Safe Daily Spending</span>
-          <span class="text-[11px] text-[#717786]">After protecting selected bills</span>
+          <span class="text-[11px] text-[#717786]">Free spending after protected bills</span>
         </div>
         <span id="safeDaily" class="font-bold text-[#006e28] text-base tabular-nums">$0.00 / day</span>
       </div>
@@ -77,9 +86,9 @@ const spendablePool = Math.max(0, budgetSettings.monthly_limit - budgetSettings.
     <div class="space-y-2 pt-1">
       <div class="flex items-center justify-between px-1">
         <span class="text-xs font-semibold text-[#717786] uppercase tracking-wider">
-          Bills in Scope (<span id="includedCount">0</span>)
+          Covered in This Cycle (<span id="includedCount">0</span> of {allBills.length})
         </span>
-        <button id="toggleAllBtn" class="text-xs text-[#007aff] font-semibold active:opacity-75">
+        <button type="button" id="toggleAllBtn" class="text-xs text-[#007aff] font-semibold active:opacity-75">
           Select All
         </button>
       </div>
@@ -91,17 +100,17 @@ const spendablePool = Math.max(0, budgetSettings.monthly_limit - budgetSettings.
       ) : (
         <div class="bg-white rounded-2xl shadow-sm divide-y divide-[#e3e2e7]/60 border border-[#e3e2e7]/60" id="billChecklist">
           {allBills.map((bill: any) => {
-            const today = new Date();
-            const due = new Date(bill.due_date);
-            const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 3600 * 24));
-            const isDueSoon = diffDays <= 30;
-
             return (
-              <label class="flex items-center justify-between px-4 py-3.5 cursor-pointer hover:bg-[#faf9fe] transition-colors bill-item" data-bill-id={bill.id} data-amount={bill.amount} data-due-days={diffDays}>
+              <label
+                class="flex items-center justify-between px-4 py-3.5 cursor-pointer hover:bg-[#faf9fe] transition-colors bill-item"
+                data-bill-id={bill.id}
+                data-amount={bill.amount}
+                data-due-date={bill.due_date}
+              >
                 <div class="flex items-center gap-3 min-w-0 flex-1">
                   <input
                     type="checkbox"
-                    checked={isDueSoon}
+                    checked
                     class="bill-checkbox w-5 h-5 rounded text-[#007aff] accent-[#007aff] cursor-pointer"
                   />
                   <div class="min-w-0 flex-1">
@@ -109,14 +118,19 @@ const spendablePool = Math.max(0, budgetSettings.monthly_limit - budgetSettings.
                       <span class="text-sm font-semibold text-[#1a1b1f] truncate">{bill.merchant}</span>
                       <span class="text-[10px] px-1.5 py-0.2 bg-[#f4f3f8] text-[#717786] rounded-md font-medium">{bill.category}</span>
                     </div>
-                    <span class="text-xs text-[#717786] block mt-0.5">
-                      {diffDays > 0 ? `Due in ${diffDays} days` : (diffDays === 0 ? 'Due today' : `Due ${bill.due_date}`)} · Due {bill.due_date}
+                    <span class="text-xs text-[#717786] block mt-0.5 due-label">
+                      Due {bill.due_date}
                     </span>
                   </div>
                 </div>
-                <span class="text-sm font-semibold text-[#1a1b1f] tabular-nums shrink-0 ml-3">
-                  ${Number(bill.amount).toFixed(2)}
-                </span>
+                <div class="text-right shrink-0 ml-3">
+                  <span class="text-sm font-semibold text-[#1a1b1f] tabular-nums block">
+                    ${Number(bill.amount).toFixed(2)}
+                  </span>
+                  <span class="text-[10px] font-medium text-[#007aff] status-tag">
+                    Protected
+                  </span>
+                </div>
               </label>
             );
           })}
@@ -140,43 +154,105 @@ const spendablePool = Math.max(0, budgetSettings.monthly_limit - budgetSettings.
     const safeDailyLabel = document.getElementById('safeDaily');
     const includedCount = document.getElementById('includedCount');
     const toggleAllBtn = document.getElementById('toggleAllBtn');
+    const presets = document.querySelectorAll('.slider-preset');
     const checkboxes = document.querySelectorAll('.bill-checkbox');
     const billItems = document.querySelectorAll('.bill-item');
 
+    // Compute calendar difference in days from today (midnight to midnight)
+    function getDaysUntil(dateStr) {
+      if (!dateStr) return 999;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Parse YYYY-MM-DD cleanly in local timezone
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const dueDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        dueDate.setHours(0, 0, 0, 0);
+        const diffMs = dueDate.getTime() - today.getTime();
+        return Math.round(diffMs / (1000 * 60 * 60 * 24));
+      }
+      return 999;
+    }
+
+    // Update relative labels on bill items (e.g. "Due in 3 days")
+    billItems.forEach(item => {
+      const dateStr = item.getAttribute('data-due-date');
+      const diff = getDaysUntil(dateStr);
+      item.setAttribute('data-diff-days', String(diff));
+
+      const dueLabel = item.querySelector('.due-label');
+      if (dueLabel) {
+        if (diff > 1) {
+          dueLabel.textContent = `Due in ${diff} days · ${dateStr}`;
+        } else if (diff === 1) {
+          dueLabel.textContent = `Due tomorrow · ${dateStr}`;
+        } else if (diff === 0) {
+          dueLabel.textContent = `Due today · ${dateStr}`;
+        } else {
+          dueLabel.textContent = `Overdue by ${Math.abs(diff)} days · ${dateStr}`;
+        }
+      }
+    });
+
     function recalculate() {
       const days = parseInt(slider.value, 10);
-      if (label) label.textContent = `Next ${days} Days`;
+      if (label) label.textContent = days === 1 ? 'Next 24 Hours' : `Next ${days} Days`;
 
       let totalQuarantined = 0;
       let count = 0;
 
       billItems.forEach(item => {
         const cb = item.querySelector('.bill-checkbox');
+        const tag = item.querySelector('.status-tag');
         const amount = parseFloat(item.getAttribute('data-amount') || '0');
+        
         if (cb && cb.checked) {
           totalQuarantined += amount;
           count++;
+          if (tag) {
+            tag.textContent = 'Protected';
+            tag.className = 'text-[10px] font-medium text-[#007aff] status-tag';
+          }
+          item.classList.remove('opacity-40');
+        } else {
+          if (tag) {
+            tag.textContent = 'Excluded';
+            tag.className = 'text-[10px] font-medium text-[#717786] status-tag';
+          }
+          item.classList.add('opacity-40');
         }
       });
 
       if (amountLabel) amountLabel.textContent = `$${totalQuarantined.toFixed(2)}`;
       if (includedCount) includedCount.textContent = String(count);
 
-      // Remaining safe daily spending calculation
+      // Remaining safe daily calculation
       const remainingSpend = Math.max(0, spendablePool - totalQuarantined);
       const daily = remainingSpend / Math.max(1, days);
       if (safeDailyLabel) {
         safeDailyLabel.textContent = `$${daily.toFixed(2)} / day`;
       }
+
+      // Highlight active preset button if match
+      presets.forEach(p => {
+        const pDays = parseInt(p.getAttribute('data-days') || '0', 10);
+        if (pDays === days) {
+          p.classList.add('text-[#007aff]', 'font-bold');
+        } else {
+          p.classList.remove('text-[#007aff]', 'font-bold');
+        }
+      });
     }
 
-    // Auto-check/uncheck bills according to selected days window
-    function updateInclusionsByDays(days) {
+    // Auto-select bills whose due date is within the slider's window
+    function syncSlider(days) {
       billItems.forEach(item => {
-        const dueDays = parseInt(item.getAttribute('data-due-days') || '999', 10);
+        const diff = parseInt(item.getAttribute('data-diff-days') || '999', 10);
         const cb = item.querySelector('.bill-checkbox');
         if (cb) {
-          cb.checked = (dueDays <= days && dueDays >= -7);
+          // Include all bills due within 'days' (including overdue bills)
+          cb.checked = (diff <= days);
         }
       });
       recalculate();
@@ -184,14 +260,14 @@ const spendablePool = Math.max(0, budgetSettings.monthly_limit - budgetSettings.
 
     slider?.addEventListener('input', (e) => {
       const days = parseInt(e.target.value, 10);
-      updateInclusionsByDays(days);
+      syncSlider(days);
     });
 
-    document.querySelectorAll('.slider-preset').forEach(preset => {
+    presets.forEach(preset => {
       preset.addEventListener('click', () => {
         const days = parseInt(preset.getAttribute('data-days') || '30', 10);
         if (slider) slider.value = String(days);
-        updateInclusionsByDays(days);
+        syncSlider(days);
       });
     });
 
@@ -206,7 +282,7 @@ const spendablePool = Math.max(0, budgetSettings.monthly_limit - budgetSettings.
       recalculate();
     });
 
-    // Run initial calculation on page load
-    recalculate();
+    // Run initial sync on 30-day window
+    syncSlider(parseInt(slider.value, 10));
   </script>
 </AppLayout>
