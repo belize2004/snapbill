@@ -2,23 +2,26 @@
 import AppLayout from '../layouts/AppLayout.astro';
 ---
 
-<AppLayout title="Scan Bill or Receipt" activeTab="scan">
-  <div class="flex flex-col h-[calc(100vh-140px)] w-full justify-between pt-1 relative">
+<AppLayout title="Scan Bill or Receipt" activeTab="scan" hideTabBar={true}>
+  <div class="flex flex-col h-[calc(100dvh-60px)] w-full justify-between pt-1 pb-4 relative select-none">
     <!-- Top Action Nav -->
-    <div class="flex items-center justify-between px-2 z-10">
-      <a href="/" class="w-10 h-10 rounded-full bg-white/80 backdrop-blur-md flex items-center justify-center text-[#1a1b1f] shadow-sm">
+    <div class="flex items-center justify-between px-2 z-10 shrink-0">
+      <a href="/" class="w-10 h-10 rounded-full bg-white/80 backdrop-blur-md flex items-center justify-center text-[#1a1b1f] shadow-sm active:scale-90 transition-transform">
         <span class="material-symbols-outlined text-[20px]">close</span>
       </a>
       <span class="text-sm font-semibold text-[#1a1b1f]">Camera Scanner</span>
-      <a href="/add" class="text-xs font-semibold text-[#007aff] bg-white/80 backdrop-blur-md px-3 py-1.5 rounded-full shadow-sm">
+      <a href="/add" class="text-xs font-semibold text-[#007aff] bg-white/80 backdrop-blur-md px-3 py-1.5 rounded-full shadow-sm active:scale-95 transition-transform">
         Manual Entry
       </a>
     </div>
 
-    <!-- Live Viewport / Document Scanner Frame -->
-    <div class="relative flex-1 my-3 bg-[#111216] rounded-3xl overflow-hidden shadow-inner flex items-center justify-center">
-      <video id="cameraFeed" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover"></video>
+    <!-- Live Viewport / Document Scanner Frame (Tap anywhere to snap) -->
+    <div id="cameraViewport" class="relative flex-1 my-3 bg-[#111216] rounded-3xl overflow-hidden shadow-inner flex items-center justify-center cursor-pointer select-none">
+      <video id="cameraFeed" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover pointer-events-none"></video>
       <canvas id="photoCanvas" class="hidden"></canvas>
+
+      <!-- Instant Captured Preview (Shows upon snap) -->
+      <img id="instantPreview" class="hidden absolute inset-0 w-full h-full object-contain bg-black z-30 pointer-events-none" />
 
       <!-- Realtime Status Banner -->
       <div id="debugStatus" class="absolute top-3 inset-x-4 bg-black/80 text-white text-xs py-2 px-3 rounded-xl backdrop-blur-md text-center z-20 pointer-events-none border border-white/10">
@@ -33,7 +36,7 @@ import AppLayout from '../layouts/AppLayout.astro';
         </div>
         <div class="text-center">
           <span class="inline-block bg-black/60 text-white backdrop-blur-md text-xs px-3 py-1.5 rounded-full font-medium shadow">
-            Frame bill or receipt clearly
+            Tap screen or shutter to snap
           </span>
         </div>
         <div class="flex justify-between">
@@ -43,7 +46,7 @@ import AppLayout from '../layouts/AppLayout.astro';
       </div>
 
       <!-- Loading / Analyzing Spinner -->
-      <div id="ocrLoading" class="hidden absolute inset-0 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center text-white z-40 space-y-3">
+      <div id="ocrLoading" class="hidden absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center text-white z-40 space-y-3">
         <div class="w-12 h-12 border-4 border-[#007aff] border-t-transparent rounded-full animate-spin"></div>
         <p class="text-sm font-semibold" id="loadingTitle">Scanning bill with AI...</p>
         <p class="text-xs text-white/70" id="loadingStatus">Reading vendor, due date & amount...</p>
@@ -54,16 +57,16 @@ import AppLayout from '../layouts/AppLayout.astro';
     <input type="file" id="nativeCameraInput" accept="image/*" capture="environment" class="hidden" />
     <input type="file" id="fileUpload" accept="image/*" class="hidden" />
 
-    <!-- Shutter Controls & Photo Upload Fallback (Elevated z-index above tab bar) -->
-    <div class="relative z-30 mb-2 flex items-center justify-around px-6 py-3 bg-white/95 backdrop-blur-xl rounded-3xl border border-[#e3e2e7]/80 shadow-lg">
+    <!-- Shutter Controls & Photo Upload Fallback (Unblocked bar) -->
+    <div class="relative z-30 shrink-0 flex items-center justify-around px-6 py-3 bg-white/95 backdrop-blur-xl rounded-3xl border border-[#e3e2e7]/80 shadow-lg touch-manipulation">
       <!-- Photo Library Picker -->
-      <button type="button" id="galleryBtn" class="w-12 h-12 rounded-full bg-[#f4f3f8] flex items-center justify-center text-[#1a1b1f] active:scale-95 transition-transform" title="Upload from Photo Library">
+      <button type="button" id="galleryBtn" class="w-12 h-12 rounded-full bg-[#f4f3f8] flex items-center justify-center text-[#1a1b1f] active:scale-95 transition-transform cursor-pointer" title="Upload from Photo Library">
         <span class="material-symbols-outlined text-[24px]">photo_library</span>
       </button>
 
       <!-- Primary Shutter Button -->
-      <button type="button" id="shutterBtn" class="w-18 h-18 rounded-full border-4 border-[#007aff] p-1 flex items-center justify-center active:scale-90 transition-transform cursor-pointer" title="Take Photo">
-        <div class="w-14 h-14 rounded-full bg-[#007aff] shadow-md flex items-center justify-center text-white">
+      <button type="button" id="shutterBtn" class="w-18 h-18 rounded-full border-4 border-[#007aff] p-1 flex items-center justify-center active:scale-90 transition-transform cursor-pointer touch-manipulation shadow-md" title="Take Photo">
+        <div class="w-14 h-14 rounded-full bg-[#007aff] flex items-center justify-center text-white pointer-events-none">
           <span class="material-symbols-outlined text-[28px]">photo_camera</span>
         </div>
       </button>
@@ -80,12 +83,16 @@ import AppLayout from '../layouts/AppLayout.astro';
     const canvas = document.getElementById('photoCanvas') as HTMLCanvasElement;
     const shutterBtn = document.getElementById('shutterBtn') as HTMLButtonElement;
     const galleryBtn = document.getElementById('galleryBtn') as HTMLButtonElement;
+    const cameraViewport = document.getElementById('cameraViewport') as HTMLDivElement;
+    const instantPreview = document.getElementById('instantPreview') as HTMLImageElement;
     const fileUpload = document.getElementById('fileUpload') as HTMLInputElement;
     const nativeCameraInput = document.getElementById('nativeCameraInput') as HTMLInputElement;
     const ocrLoading = document.getElementById('ocrLoading');
     const loadingStatus = document.getElementById('loadingStatus');
     const debugStatus = document.getElementById('debugStatus');
+
     let hasLiveStream = false;
+    let isCapturing = false;
 
     function logTele(msg: string) {
       if (debugStatus) debugStatus.textContent = msg;
@@ -100,7 +107,7 @@ import AppLayout from '../layouts/AppLayout.astro';
 
     async function startCamera() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        logTele('Camera stream not supported. Use shutter to take photo.');
+        logTele('Camera stream not supported. Tap shutter to take photo.');
         return;
       }
 
@@ -108,19 +115,33 @@ import AppLayout from '../layouts/AppLayout.astro';
         logTele('Requesting camera...');
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
-            facingMode: { ideal: 'environment' }
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
           },
           audio: false
         });
+
         video.srcObject = stream;
         video.setAttribute('playsinline', 'true');
+        video.setAttribute('webkit-playsinline', 'true');
         video.setAttribute('autoplay', 'true');
-        video.play().then(() => {
+
+        const onVideoReady = () => {
           hasLiveStream = true;
-          logTele('Camera ready. Tap blue shutter to snap.');
-        }).catch(err => {
-          logTele('Autoplay blocked. Tap shutter to take photo.');
-        });
+          logTele(`Camera ready (${video.videoWidth || 'auto'}x${video.videoHeight || 'auto'}). Tap anywhere to snap.`);
+        };
+
+        video.addEventListener('loadedmetadata', onVideoReady, { once: true });
+        video.addEventListener('canplay', onVideoReady, { once: true });
+
+        try {
+          await video.play();
+          hasLiveStream = true;
+          logTele('Camera ready. Tap screen or shutter to snap.');
+        } catch (playErr) {
+          logTele('Autoplay blocked. Tap shutter or screen to activate.');
+        }
       } catch (err: any) {
         hasLiveStream = false;
         logTele('Camera stream restricted. Tap shutter to capture.');
@@ -130,12 +151,14 @@ import AppLayout from '../layouts/AppLayout.astro';
     startCamera();
 
     function processAndSend(source: CanvasImageSource, srcWidth: number, srcHeight: number) {
+      if (isCapturing) return;
+      isCapturing = true;
+
       logTele(`Processing photo (${srcWidth}x${srcHeight})...`);
-      if (ocrLoading) ocrLoading.classList.remove('hidden');
-      if (loadingStatus) loadingStatus.textContent = 'Optimizing for AI...';
 
       try {
-        const MAX_DIM = 900;
+        // Downscale to max 800px constraint
+        const MAX_DIM = 800;
         let width = srcWidth;
         let height = srcHeight;
 
@@ -157,9 +180,20 @@ import AppLayout from '../layouts/AppLayout.astro';
         if (!ctx) throw new Error('Canvas 2D unavailable');
         ctx.drawImage(source, 0, 0, width, height);
 
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+        // Instant visual feedback preview
+        if (instantPreview) {
+          instantPreview.src = dataUrl;
+          instantPreview.classList.remove('hidden');
+        }
+
+        if (ocrLoading) ocrLoading.classList.remove('hidden');
+        if (loadingStatus) loadingStatus.textContent = 'Optimizing for AI...';
+
         postOCR(dataUrl);
       } catch (e: any) {
+        isCapturing = false;
         logTele('Error preparing photo: ' + e.message);
         if (ocrLoading) ocrLoading.classList.add('hidden');
         alert('Failed to process image: ' + e.message);
@@ -178,6 +212,7 @@ import AppLayout from '../layouts/AppLayout.astro';
           processAndSend(img, img.naturalWidth || img.width, img.naturalHeight || img.height);
         };
         img.onerror = () => {
+          isCapturing = false;
           logTele('Image decode failed');
           if (ocrLoading) ocrLoading.classList.add('hidden');
         };
@@ -207,24 +242,50 @@ import AppLayout from '../layouts/AppLayout.astro';
       }
     }
 
-    // Shutter Trigger: Support both touchstart and click
-    function onShutter(e: Event) {
-      e.preventDefault();
-      logTele(`Shutter activated (video: ${video.videoWidth}x${video.videoHeight}, readyState: ${video.readyState})`);
+    // Capture Trigger: handles live stream or falls back to native camera input
+    function triggerCapture(e?: Event) {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      if (isCapturing) return;
 
-      if (video.videoWidth > 0 && video.readyState >= 2) {
+      const vidW = video.videoWidth || (video.getBoundingClientRect().width > 0 ? 1280 : 0);
+      const vidH = video.videoHeight || (video.getBoundingClientRect().height > 0 ? 720 : 0);
+
+      logTele(`Capture triggered (stream: ${hasLiveStream}, size: ${video.videoWidth}x${video.videoHeight}, readyState: ${video.readyState})`);
+
+      // If video has dimensions and ready state, or stream is active, capture from video
+      if (hasLiveStream && video.videoWidth > 0 && video.videoHeight > 0) {
         processAndSend(video, video.videoWidth, video.videoHeight);
+      } else if (hasLiveStream && (video.srcObject as MediaStream)?.active) {
+        // Fallback dimensions if videoWidth is momentarily 0 on some Safari builds
+        const width = video.videoWidth || 1280;
+        const height = video.videoHeight || 720;
+        processAndSend(video, width, height);
       } else {
-        logTele('Using native camera capture...');
+        logTele('Opening native camera capture...');
         nativeCameraInput?.click();
       }
     }
 
-    shutterBtn?.addEventListener('click', onShutter);
-    shutterBtn?.addEventListener('touchend', onShutter);
+    // Tap anywhere on viewport to snap
+    cameraViewport?.addEventListener('click', (e) => {
+      triggerCapture(e);
+    });
+
+    // Shutter button listeners
+    shutterBtn?.addEventListener('click', (e) => {
+      triggerCapture(e);
+    });
+
+    shutterBtn?.addEventListener('touchend', (e) => {
+      triggerCapture(e);
+    }, { passive: false });
 
     galleryBtn?.addEventListener('click', (e) => {
       e.preventDefault();
+      e.stopPropagation();
       logTele('Opening photo library...');
       fileUpload?.click();
     });
