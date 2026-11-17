@@ -3,9 +3,9 @@ import AppLayout from '../layouts/AppLayout.astro';
 ---
 
 <AppLayout title="Scan Bill or Receipt" activeTab="scan">
-  <div class="flex flex-col h-[calc(100vh-140px)] w-full justify-between pt-2">
+  <div class="flex flex-col h-[calc(100vh-140px)] w-full justify-between pt-1 relative">
     <!-- Top Action Nav -->
-    <div class="flex items-center justify-between px-2">
+    <div class="flex items-center justify-between px-2 z-10">
       <a href="/" class="w-10 h-10 rounded-full bg-white/80 backdrop-blur-md flex items-center justify-center text-[#1a1b1f] shadow-sm">
         <span class="material-symbols-outlined text-[20px]">close</span>
       </a>
@@ -16,27 +16,24 @@ import AppLayout from '../layouts/AppLayout.astro';
     </div>
 
     <!-- Live Viewport / Document Scanner Frame -->
-    <div class="relative flex-1 my-4 bg-[#1a1b1f] rounded-3xl overflow-hidden shadow-inner flex items-center justify-center">
+    <div class="relative flex-1 my-3 bg-[#111216] rounded-3xl overflow-hidden shadow-inner flex items-center justify-center">
       <video id="cameraFeed" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover"></video>
       <canvas id="photoCanvas" class="hidden"></canvas>
 
-      <!-- Status / Debug Banner on Viewport -->
-      <div id="debugStatus" class="absolute top-4 inset-x-4 bg-black/75 text-white/90 text-xs py-2 px-3 rounded-xl backdrop-blur-md text-center z-20 pointer-events-none">
-        Initializing camera...
+      <!-- Realtime Status Banner -->
+      <div id="debugStatus" class="absolute top-3 inset-x-4 bg-black/80 text-white text-xs py-2 px-3 rounded-xl backdrop-blur-md text-center z-20 pointer-events-none border border-white/10">
+        Camera initializing...
       </div>
 
-      <!-- Preview Image if captured -->
-      <img id="capturedPreview" class="hidden absolute inset-0 w-full h-full object-contain z-15 bg-black" />
-
       <!-- Alignment Guidelines -->
-      <div id="overlayGuidelines" class="absolute inset-6 border-2 border-dashed border-white/60 rounded-2xl pointer-events-none flex flex-col justify-between p-4 z-10">
+      <div id="overlayGuidelines" class="absolute inset-6 border-2 border-dashed border-white/50 rounded-2xl pointer-events-none flex flex-col justify-between p-4 z-10">
         <div class="flex justify-between">
           <div class="w-6 h-6 border-t-2 border-l-2 border-[#007aff]"></div>
           <div class="w-6 h-6 border-t-2 border-r-2 border-[#007aff]"></div>
         </div>
         <div class="text-center">
           <span class="inline-block bg-black/60 text-white backdrop-blur-md text-xs px-3 py-1.5 rounded-full font-medium shadow">
-            Align bill or receipt within frame
+            Frame bill or receipt clearly
           </span>
         </div>
         <div class="flex justify-between">
@@ -46,33 +43,33 @@ import AppLayout from '../layouts/AppLayout.astro';
       </div>
 
       <!-- Loading / Analyzing Spinner -->
-      <div id="ocrLoading" class="hidden absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center text-white z-30 space-y-3">
+      <div id="ocrLoading" class="hidden absolute inset-0 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center text-white z-40 space-y-3">
         <div class="w-12 h-12 border-4 border-[#007aff] border-t-transparent rounded-full animate-spin"></div>
-        <p class="text-sm font-semibold">Extracting bill details with AI...</p>
-        <p class="text-xs text-white/70" id="loadingStatus">Optimizing image...</p>
+        <p class="text-sm font-semibold" id="loadingTitle">Scanning bill with AI...</p>
+        <p class="text-xs text-white/70" id="loadingStatus">Reading vendor, due date & amount...</p>
       </div>
     </div>
 
-    <!-- Hidden native inputs -->
+    <!-- Hidden Native Inputs -->
     <input type="file" id="nativeCameraInput" accept="image/*" capture="environment" class="hidden" />
     <input type="file" id="fileUpload" accept="image/*" class="hidden" />
 
-    <!-- Shutter Controls & Photo Upload Fallback -->
-    <div class="flex items-center justify-around px-6 py-4 bg-white/80 backdrop-blur-xl rounded-3xl border border-[#e3e2e7]/60 shadow-sm">
+    <!-- Shutter Controls & Photo Upload Fallback (Elevated z-index above tab bar) -->
+    <div class="relative z-30 mb-2 flex items-center justify-around px-6 py-3 bg-white/95 backdrop-blur-xl rounded-3xl border border-[#e3e2e7]/80 shadow-lg">
       <!-- Photo Library Picker -->
-      <button type="button" id="galleryBtn" class="w-12 h-12 rounded-full bg-[#f4f3f8] flex items-center justify-center text-[#1a1b1f] active:scale-95 transition-transform" title="Choose from library">
+      <button type="button" id="galleryBtn" class="w-12 h-12 rounded-full bg-[#f4f3f8] flex items-center justify-center text-[#1a1b1f] active:scale-95 transition-transform" title="Upload from Photo Library">
         <span class="material-symbols-outlined text-[24px]">photo_library</span>
       </button>
 
       <!-- Primary Shutter Button -->
-      <button type="button" id="shutterBtn" class="w-18 h-18 rounded-full border-4 border-[#007aff] p-1 flex items-center justify-center active:scale-90 transition-transform">
+      <button type="button" id="shutterBtn" class="w-18 h-18 rounded-full border-4 border-[#007aff] p-1 flex items-center justify-center active:scale-90 transition-transform cursor-pointer" title="Take Photo">
         <div class="w-14 h-14 rounded-full bg-[#007aff] shadow-md flex items-center justify-center text-white">
           <span class="material-symbols-outlined text-[28px]">photo_camera</span>
         </div>
       </button>
 
       <!-- Manual Add Shortcut -->
-      <a href="/add" class="w-12 h-12 rounded-full bg-[#f4f3f8] flex items-center justify-center text-[#007aff] active:scale-95 transition-transform" title="Add manually">
+      <a href="/add" class="w-12 h-12 rounded-full bg-[#f4f3f8] flex items-center justify-center text-[#007aff] active:scale-95 transition-transform" title="Manual Bill Entry">
         <span class="material-symbols-outlined text-[24px]">edit</span>
       </a>
     </div>
@@ -90,54 +87,52 @@ import AppLayout from '../layouts/AppLayout.astro';
     const debugStatus = document.getElementById('debugStatus');
     let hasLiveStream = false;
 
-    function setDebug(msg: string) {
+    function logTele(msg: string) {
       if (debugStatus) debugStatus.textContent = msg;
-      // Send telemetry to server tail
       try {
         fetch('/api/client-log', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: msg, time: new Date().toISOString() })
+          body: JSON.stringify({ event: msg, time: new Date().toISOString() })
         }).catch(() => {});
       } catch (e) {}
     }
 
-    async function initCamera() {
+    async function startCamera() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setDebug('Live camera not supported. Tap camera button to take photo.');
-        hasLiveStream = false;
+        logTele('Camera stream not supported. Use shutter to take photo.');
         return;
       }
 
       try {
-        setDebug('Requesting camera permission...');
+        logTele('Requesting camera...');
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
+            facingMode: { ideal: 'environment' }
           },
           audio: false
         });
         video.srcObject = stream;
-        video.onloadedmetadata = () => {
-          video.play().catch(e => setDebug('Autoplay error: ' + e.message));
+        video.setAttribute('playsinline', 'true');
+        video.setAttribute('autoplay', 'true');
+        video.play().then(() => {
           hasLiveStream = true;
-          setDebug('Camera ready. Tap blue button to scan.');
-        };
+          logTele('Camera ready. Tap blue shutter to snap.');
+        }).catch(err => {
+          logTele('Autoplay blocked. Tap shutter to take photo.');
+        });
       } catch (err: any) {
-        console.warn('getUserMedia error:', err);
         hasLiveStream = false;
-        setDebug('Camera access restricted. Tap button to snap or upload.');
+        logTele('Camera stream restricted. Tap shutter to capture.');
       }
     }
 
-    initCamera();
+    startCamera();
 
-    function compressAndSend(source: CanvasImageSource, srcWidth: number, srcHeight: number) {
-      setDebug(`Processing image (${srcWidth}x${srcHeight})...`);
+    function processAndSend(source: CanvasImageSource, srcWidth: number, srcHeight: number) {
+      logTele(`Processing photo (${srcWidth}x${srcHeight})...`);
       if (ocrLoading) ocrLoading.classList.remove('hidden');
-      if (loadingStatus) loadingStatus.textContent = 'Optimizing image...';
+      if (loadingStatus) loadingStatus.textContent = 'Optimizing for AI...';
 
       try {
         const MAX_DIM = 900;
@@ -159,48 +154,41 @@ import AppLayout from '../layouts/AppLayout.astro';
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          throw new Error('Canvas 2D context unavailable');
-        }
+        if (!ctx) throw new Error('Canvas 2D unavailable');
         ctx.drawImage(source, 0, 0, width, height);
 
-        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
-        sendToOCR(compressedDataUrl);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        postOCR(dataUrl);
       } catch (e: any) {
-        setDebug('Image processing error: ' + e.message);
+        logTele('Error preparing photo: ' + e.message);
         if (ocrLoading) ocrLoading.classList.add('hidden');
-        alert('Image processing failed: ' + e.message);
+        alert('Failed to process image: ' + e.message);
       }
     }
 
     function handleFile(file: File) {
-      setDebug(`Loading file: ${file.name} (${Math.round(file.size / 1024)} KB)...`);
+      logTele(`Reading photo: ${file.name} (${Math.round(file.size / 1024)} KB)...`);
       if (ocrLoading) ocrLoading.classList.remove('hidden');
-      if (loadingStatus) loadingStatus.textContent = 'Reading photo...';
+      if (loadingStatus) loadingStatus.textContent = 'Loading captured bill...';
 
       const reader = new FileReader();
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-          compressAndSend(img, img.naturalWidth || img.width, img.naturalHeight || img.height);
+          processAndSend(img, img.naturalWidth || img.width, img.naturalHeight || img.height);
         };
-        img.onerror = (imgErr) => {
-          setDebug('Image decode failed');
+        img.onerror = () => {
+          logTele('Image decode failed');
           if (ocrLoading) ocrLoading.classList.add('hidden');
-          alert('Could not decode photo format.');
         };
         img.src = e.target?.result as string;
-      };
-      reader.onerror = (readErr) => {
-        setDebug('FileReader error: ' + readErr);
-        if (ocrLoading) ocrLoading.classList.add('hidden');
       };
       reader.readAsDataURL(file);
     }
 
-    async function sendToOCR(dataUrl: string) {
-      setDebug('Sending image to AI OCR...');
-      if (loadingStatus) loadingStatus.textContent = 'AI reading vendor & amount...';
+    async function postOCR(dataUrl: string) {
+      logTele('Sending to Cloudflare AI...');
+      if (loadingStatus) loadingStatus.textContent = 'Cloudflare AI extracting details...';
 
       try {
         const res = await fetch('/api/ocr', {
@@ -208,38 +196,36 @@ import AppLayout from '../layouts/AppLayout.astro';
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image: dataUrl })
         });
-        
-        if (!res.ok) {
-          const errText = await res.text();
-          throw new Error(`Server returned HTTP ${res.status}: ${errText}`);
-        }
-
         const result = await res.json();
-        setDebug('AI parsed! Redirecting to review...');
+        logTele('AI analysis complete!');
         sessionStorage.setItem('pendingBill', JSON.stringify(result));
         window.location.href = '/review';
       } catch (err: any) {
-        setDebug('OCR failed: ' + err.message);
-        sessionStorage.setItem('pendingBill', JSON.stringify({ error: err.message || 'OCR failed' }));
+        logTele('AI OCR request failed: ' + err.message);
+        sessionStorage.setItem('pendingBill', JSON.stringify({ error: err.message || 'AI request failed' }));
         window.location.href = '/review';
       }
     }
 
-    shutterBtn?.addEventListener('click', (e) => {
+    // Shutter Trigger: Support both touchstart and click
+    function onShutter(e: Event) {
       e.preventDefault();
-      setDebug('Shutter clicked. Checking live stream: ' + hasLiveStream + ' videoWidth: ' + video.videoWidth);
+      logTele(`Shutter activated (video: ${video.videoWidth}x${video.videoHeight}, readyState: ${video.readyState})`);
 
-      if (hasLiveStream && video.videoWidth > 0 && video.readyState >= 2) {
-        compressAndSend(video, video.videoWidth, video.videoHeight);
+      if (video.videoWidth > 0 && video.readyState >= 2) {
+        processAndSend(video, video.videoWidth, video.videoHeight);
       } else {
-        setDebug('Triggering native camera selector...');
+        logTele('Using native camera capture...');
         nativeCameraInput?.click();
       }
-    });
+    }
+
+    shutterBtn?.addEventListener('click', onShutter);
+    shutterBtn?.addEventListener('touchend', onShutter);
 
     galleryBtn?.addEventListener('click', (e) => {
       e.preventDefault();
-      setDebug('Opening photo library...');
+      logTele('Opening photo library...');
       fileUpload?.click();
     });
 
@@ -248,7 +234,7 @@ import AppLayout from '../layouts/AppLayout.astro';
       if (target.files && target.files.length > 0) {
         handleFile(target.files[0]);
       } else {
-        setDebug('Camera selection was canceled');
+        logTele('Camera dismissed without photo');
       }
     });
 
@@ -256,8 +242,6 @@ import AppLayout from '../layouts/AppLayout.astro';
       const target = e.target as HTMLInputElement;
       if (target.files && target.files.length > 0) {
         handleFile(target.files[0]);
-      } else {
-        setDebug('Gallery selection was canceled');
       }
     });
   </script>
