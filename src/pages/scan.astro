@@ -20,18 +20,13 @@ import AppLayout from '../layouts/AppLayout.astro';
       <video id="cameraFeed" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover"></video>
       <canvas id="photoCanvas" class="hidden"></canvas>
 
-      <!-- Fallback view if live video stream is not active -->
-      <div id="cameraBlockedNotice" class="hidden absolute inset-0 bg-[#1a1b1f] flex flex-col items-center justify-center p-6 text-center text-white space-y-4 z-10">
-        <div class="w-16 h-16 rounded-full bg-[#007aff]/20 flex items-center justify-center text-[#007aff]">
-          <span class="material-symbols-outlined text-[36px]">photo_camera</span>
-        </div>
-        <div>
-          <h3 class="text-base font-bold">Snap or Upload Bill</h3>
-          <p class="text-xs text-white/70 max-w-xs mt-1">
-            Tap the blue button below to snap a photo or upload an image.
-          </p>
-        </div>
+      <!-- Status / Debug Banner on Viewport -->
+      <div id="debugStatus" class="absolute top-4 inset-x-4 bg-black/75 text-white/90 text-xs py-2 px-3 rounded-xl backdrop-blur-md text-center z-20 pointer-events-none">
+        Initializing camera...
       </div>
+
+      <!-- Preview Image if captured -->
+      <img id="capturedPreview" class="hidden absolute inset-0 w-full h-full object-contain z-15 bg-black" />
 
       <!-- Alignment Guidelines -->
       <div id="overlayGuidelines" class="absolute inset-6 border-2 border-dashed border-white/60 rounded-2xl pointer-events-none flex flex-col justify-between p-4 z-10">
@@ -54,28 +49,30 @@ import AppLayout from '../layouts/AppLayout.astro';
       <div id="ocrLoading" class="hidden absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center text-white z-30 space-y-3">
         <div class="w-12 h-12 border-4 border-[#007aff] border-t-transparent rounded-full animate-spin"></div>
         <p class="text-sm font-semibold">Extracting bill details with AI...</p>
-        <p class="text-xs text-white/70" id="loadingStatus">Vendor, Total, Due Date & Line Items</p>
+        <p class="text-xs text-white/70" id="loadingStatus">Optimizing image...</p>
       </div>
     </div>
 
-    <!-- Hidden Native Mobile Inputs -->
+    <!-- Hidden native inputs -->
     <input type="file" id="nativeCameraInput" accept="image/*" capture="environment" class="hidden" />
     <input type="file" id="fileUpload" accept="image/*" class="hidden" />
 
     <!-- Shutter Controls & Photo Upload Fallback -->
     <div class="flex items-center justify-around px-6 py-4 bg-white/80 backdrop-blur-xl rounded-3xl border border-[#e3e2e7]/60 shadow-sm">
       <!-- Photo Library Picker -->
-      <button type="button" id="galleryBtn" class="w-12 h-12 rounded-full bg-[#f4f3f8] flex items-center justify-center text-[#1a1b1f] active:scale-95 transition-transform">
+      <button type="button" id="galleryBtn" class="w-12 h-12 rounded-full bg-[#f4f3f8] flex items-center justify-center text-[#1a1b1f] active:scale-95 transition-transform" title="Choose from library">
         <span class="material-symbols-outlined text-[24px]">photo_library</span>
       </button>
 
       <!-- Primary Shutter Button -->
       <button type="button" id="shutterBtn" class="w-18 h-18 rounded-full border-4 border-[#007aff] p-1 flex items-center justify-center active:scale-90 transition-transform">
-        <div class="w-14 h-14 rounded-full bg-[#007aff] shadow-md"></div>
+        <div class="w-14 h-14 rounded-full bg-[#007aff] shadow-md flex items-center justify-center text-white">
+          <span class="material-symbols-outlined text-[28px]">photo_camera</span>
+        </div>
       </button>
 
       <!-- Manual Add Shortcut -->
-      <a href="/add" class="w-12 h-12 rounded-full bg-[#f4f3f8] flex items-center justify-center text-[#007aff] active:scale-95 transition-transform">
+      <a href="/add" class="w-12 h-12 rounded-full bg-[#f4f3f8] flex items-center justify-center text-[#007aff] active:scale-95 transition-transform" title="Add manually">
         <span class="material-symbols-outlined text-[24px]">edit</span>
       </a>
     </div>
@@ -90,63 +87,94 @@ import AppLayout from '../layouts/AppLayout.astro';
     const nativeCameraInput = document.getElementById('nativeCameraInput') as HTMLInputElement;
     const ocrLoading = document.getElementById('ocrLoading');
     const loadingStatus = document.getElementById('loadingStatus');
-    const cameraBlockedNotice = document.getElementById('cameraBlockedNotice');
+    const debugStatus = document.getElementById('debugStatus');
     let hasLiveStream = false;
 
-    async function initCamera() {
+    function setDebug(msg: string) {
+      if (debugStatus) debugStatus.textContent = msg;
+      // Send telemetry to server tail
       try {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: 'environment' } },
-            audio: false
-          });
-          video.srcObject = stream;
-          hasLiveStream = true;
-        } else {
-          showCameraFallback();
-        }
-      } catch (e) {
-        showCameraFallback();
-      }
+        fetch('/api/client-log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: msg, time: new Date().toISOString() })
+        }).catch(() => {});
+      } catch (e) {}
     }
 
-    function showCameraFallback() {
-      hasLiveStream = false;
-      if (cameraBlockedNotice) cameraBlockedNotice.classList.remove('hidden');
+    async function initCamera() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setDebug('Live camera not supported. Tap camera button to take photo.');
+        hasLiveStream = false;
+        return;
+      }
+
+      try {
+        setDebug('Requesting camera permission...');
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        });
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+          video.play().catch(e => setDebug('Autoplay error: ' + e.message));
+          hasLiveStream = true;
+          setDebug('Camera ready. Tap blue button to scan.');
+        };
+      } catch (err: any) {
+        console.warn('getUserMedia error:', err);
+        hasLiveStream = false;
+        setDebug('Camera access restricted. Tap button to snap or upload.');
+      }
     }
 
     initCamera();
 
     function compressAndSend(source: CanvasImageSource, srcWidth: number, srcHeight: number) {
+      setDebug(`Processing image (${srcWidth}x${srcHeight})...`);
       if (ocrLoading) ocrLoading.classList.remove('hidden');
       if (loadingStatus) loadingStatus.textContent = 'Optimizing image...';
 
-      const MAX_DIM = 900;
-      let width = srcWidth;
-      let height = srcHeight;
+      try {
+        const MAX_DIM = 900;
+        let width = srcWidth;
+        let height = srcHeight;
 
-      if (width > height) {
-        if (width > MAX_DIM) {
-          height = Math.round((height * MAX_DIM) / width);
-          width = MAX_DIM;
+        if (width > height) {
+          if (width > MAX_DIM) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          }
+        } else {
+          if (height > MAX_DIM) {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
         }
-      } else {
-        if (height > MAX_DIM) {
-          width = Math.round((width * MAX_DIM) / height);
-          height = MAX_DIM;
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          throw new Error('Canvas 2D context unavailable');
         }
+        ctx.drawImage(source, 0, 0, width, height);
+
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        sendToOCR(compressedDataUrl);
+      } catch (e: any) {
+        setDebug('Image processing error: ' + e.message);
+        if (ocrLoading) ocrLoading.classList.add('hidden');
+        alert('Image processing failed: ' + e.message);
       }
-
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx?.drawImage(source, 0, 0, width, height);
-
-      const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      sendToOCR(compressedDataUrl);
     }
 
-    function processFile(file: File) {
+    function handleFile(file: File) {
+      setDebug(`Loading file: ${file.name} (${Math.round(file.size / 1024)} KB)...`);
       if (ocrLoading) ocrLoading.classList.remove('hidden');
       if (loadingStatus) loadingStatus.textContent = 'Reading photo...';
 
@@ -154,15 +182,25 @@ import AppLayout from '../layouts/AppLayout.astro';
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-          compressAndSend(img, img.width, img.height);
+          compressAndSend(img, img.naturalWidth || img.width, img.naturalHeight || img.height);
+        };
+        img.onerror = (imgErr) => {
+          setDebug('Image decode failed');
+          if (ocrLoading) ocrLoading.classList.add('hidden');
+          alert('Could not decode photo format.');
         };
         img.src = e.target?.result as string;
+      };
+      reader.onerror = (readErr) => {
+        setDebug('FileReader error: ' + readErr);
+        if (ocrLoading) ocrLoading.classList.add('hidden');
       };
       reader.readAsDataURL(file);
     }
 
     async function sendToOCR(dataUrl: string) {
-      if (loadingStatus) loadingStatus.textContent = 'AI extracting vendor & amount...';
+      setDebug('Sending image to AI OCR...');
+      if (loadingStatus) loadingStatus.textContent = 'AI reading vendor & amount...';
 
       try {
         const res = await fetch('/api/ocr', {
@@ -170,42 +208,57 @@ import AppLayout from '../layouts/AppLayout.astro';
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image: dataUrl })
         });
+        
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Server returned HTTP ${res.status}: ${errText}`);
+        }
+
         const result = await res.json();
+        setDebug('AI parsed! Redirecting to review...');
         sessionStorage.setItem('pendingBill', JSON.stringify(result));
         window.location.href = '/review';
       } catch (err: any) {
-        console.error('OCR Error:', err);
-        sessionStorage.setItem('pendingBill', JSON.stringify({ error: 'OCR connection failed' }));
+        setDebug('OCR failed: ' + err.message);
+        sessionStorage.setItem('pendingBill', JSON.stringify({ error: err.message || 'OCR failed' }));
         window.location.href = '/review';
       }
     }
 
-    // Shutter button behavior
     shutterBtn?.addEventListener('click', (e) => {
       e.preventDefault();
-      // If live camera is actively streaming, snap immediately
-      if (hasLiveStream && video.videoWidth > 0) {
+      setDebug('Shutter clicked. Checking live stream: ' + hasLiveStream + ' videoWidth: ' + video.videoWidth);
+
+      if (hasLiveStream && video.videoWidth > 0 && video.readyState >= 2) {
         compressAndSend(video, video.videoWidth, video.videoHeight);
       } else {
-        // Fallback to native mobile camera capture
+        setDebug('Triggering native camera selector...');
         nativeCameraInput?.click();
       }
     });
 
-    // Gallery button behavior
     galleryBtn?.addEventListener('click', (e) => {
       e.preventDefault();
+      setDebug('Opening photo library...');
       fileUpload?.click();
     });
 
     nativeCameraInput?.addEventListener('change', (e) => {
-      const file = (e.target as HTMLInputElement)?.files?.[0];
-      if (file) processFile(file);
+      const target = e.target as HTMLInputElement;
+      if (target.files && target.files.length > 0) {
+        handleFile(target.files[0]);
+      } else {
+        setDebug('Camera selection was canceled');
+      }
     });
 
     fileUpload?.addEventListener('change', (e) => {
-      const file = (e.target as HTMLInputElement)?.files?.[0];
-      if (file) processFile(file);
+      const target = e.target as HTMLInputElement;
+      if (target.files && target.files.length > 0) {
+        handleFile(target.files[0]);
+      } else {
+        setDebug('Gallery selection was canceled');
+      }
     });
   </script>
 </AppLayout>
