@@ -1,5 +1,35 @@
 ---
 import AppLayout from '../layouts/AppLayout.astro';
+import { getCloudflareBindings } from '../lib/db';
+
+export const prerender = false;
+
+const env = await getCloudflareBindings();
+const db = env?.DB;
+
+let allBills: any[] = [];
+let budgetSettings: any = {
+  monthly_income: 5000.00,
+  monthly_limit: 4200.00,
+  current_spent: 1719.50
+};
+
+if (db) {
+  try {
+    const billsRes = await db.prepare("SELECT * FROM bills ORDER BY due_date ASC").all();
+    allBills = billsRes.results || [];
+
+    const budgetRes = await db.prepare("SELECT * FROM budget_settings WHERE id = 1").first();
+    if (budgetRes) {
+      budgetSettings = budgetRes;
+    }
+  } catch (e) {
+    console.error("D1 Error on calculator:", e);
+  }
+}
+
+// Compute remaining spendable pool
+const spendablePool = Math.max(0, budgetSettings.monthly_limit - budgetSettings.current_spent);
 ---
 
 <AppLayout title="Bill Coverage Calculator" activeTab="settings">
@@ -14,12 +44,12 @@ import AppLayout from '../layouts/AppLayout.astro';
     <div class="bg-white rounded-3xl p-5 shadow-sm border border-[#e3e2e7]/60 space-y-4">
       <div class="flex items-center justify-between">
         <div>
-          <span class="text-xs text-[#717786] font-medium block">Coverage Period</span>
+          <span class="text-xs text-[#717786] font-medium block">Coverage Window</span>
           <h2 id="coverageDaysLabel" class="text-2xl font-bold text-[#1a1b1f] mt-0.5">Next 30 Days</h2>
         </div>
         <div class="text-right">
-          <span class="text-xs text-[#717786] font-medium block">Total Quarantined</span>
-          <span id="quarantinedAmount" class="text-2xl font-bold text-[#007aff] tabular-nums mt-0.5">$450.00</span>
+          <span class="text-xs text-[#717786] font-medium block">Total Ring-Fenced</span>
+          <span id="quarantinedAmount" class="text-2xl font-bold text-[#007aff] tabular-nums mt-0.5">$0.00</span>
         </div>
       </div>
 
@@ -27,95 +57,156 @@ import AppLayout from '../layouts/AppLayout.astro';
       <div class="space-y-2 pt-2">
         <input type="range" id="coverageRange" min="7" max="60" value="30" step="1" class="w-full h-2 bg-[#eeedf3] rounded-lg appearance-none cursor-pointer accent-[#007aff]" />
         <div class="flex justify-between text-[11px] font-semibold text-[#717786]">
-          <span>7 Days</span>
-          <span>15 Days</span>
-          <span class="text-[#007aff]">30 Days</span>
-          <span>60 Days</span>
+          <span class="slider-preset cursor-pointer hover:text-[#007aff]" data-days="7">7 Days</span>
+          <span class="slider-preset cursor-pointer hover:text-[#007aff]" data-days="15">15 Days</span>
+          <span class="slider-preset cursor-pointer text-[#007aff] font-bold" data-days="30">30 Days</span>
+          <span class="slider-preset cursor-pointer hover:text-[#007aff]" data-days="60">60 Days</span>
         </div>
       </div>
 
       <div class="p-3.5 bg-[#f4f3f8] rounded-2xl flex items-center justify-between text-xs">
-        <span class="text-[#414755]">Daily Safe Spending Balance</span>
-        <span id="safeDaily" class="font-bold text-[#006e28] text-sm tabular-nums">$158.93 / day</span>
+        <div>
+          <span class="text-[#414755] block font-medium">Safe Daily Spending</span>
+          <span class="text-[11px] text-[#717786]">After protecting selected bills</span>
+        </div>
+        <span id="safeDaily" class="font-bold text-[#006e28] text-base tabular-nums">$0.00 / day</span>
       </div>
     </div>
 
     <!-- Bill Inclusion Checklist -->
     <div class="space-y-2 pt-1">
       <div class="flex items-center justify-between px-1">
-        <span class="text-xs font-semibold text-[#717786] uppercase tracking-wider">Covered in This Cycle</span>
-        <span class="text-xs text-[#007aff] font-medium">Auto-calculated</span>
+        <span class="text-xs font-semibold text-[#717786] uppercase tracking-wider">
+          Bills in Scope (<span id="includedCount">0</span>)
+        </span>
+        <button id="toggleAllBtn" class="text-xs text-[#007aff] font-semibold active:opacity-75">
+          Select All
+        </button>
       </div>
 
-      <div class="bg-white rounded-2xl shadow-sm divide-y divide-[#e3e2e7]/60 border border-[#e3e2e7]/60">
-        <label class="flex items-center justify-between px-4 py-3 cursor-pointer">
-          <div class="flex items-center gap-3">
-            <input type="checkbox" checked class="w-5 h-5 rounded text-[#007aff] accent-[#007aff]" />
-            <div>
-              <span class="text-sm font-semibold text-[#1a1b1f] block">Con Edison</span>
-              <span class="text-xs text-[#717786]">Due in 4 days</span>
-            </div>
-          </div>
-          <span class="text-sm font-semibold text-[#1a1b1f] tabular-nums">$112.40</span>
-        </label>
+      {allBills.length === 0 ? (
+        <div class="bg-white rounded-2xl p-6 text-center text-sm text-[#717786] border border-[#e3e2e7]/60">
+          No bills found. <a href="/add" class="text-[#007aff] font-semibold underline">Add a bill</a> or <a href="/scan" class="text-[#007aff] font-semibold underline">scan a bill</a> to start planning.
+        </div>
+      ) : (
+        <div class="bg-white rounded-2xl shadow-sm divide-y divide-[#e3e2e7]/60 border border-[#e3e2e7]/60" id="billChecklist">
+          {allBills.map((bill: any) => {
+            const today = new Date();
+            const due = new Date(bill.due_date);
+            const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 3600 * 24));
+            const isDueSoon = diffDays <= 30;
 
-        <label class="flex items-center justify-between px-4 py-3 cursor-pointer">
-          <div class="flex items-center gap-3">
-            <input type="checkbox" checked class="w-5 h-5 rounded text-[#007aff] accent-[#007aff]" />
-            <div>
-              <span class="text-sm font-semibold text-[#1a1b1f] block">Apple Services</span>
-              <span class="text-xs text-[#717786]">Due in 8 days</span>
-            </div>
-          </div>
-          <span class="text-sm font-semibold text-[#1a1b1f] tabular-nums">$14.99</span>
-        </label>
+            return (
+              <label class="flex items-center justify-between px-4 py-3.5 cursor-pointer hover:bg-[#faf9fe] transition-colors bill-item" data-bill-id={bill.id} data-amount={bill.amount} data-due-days={diffDays}>
+                <div class="flex items-center gap-3 min-w-0 flex-1">
+                  <input
+                    type="checkbox"
+                    checked={isDueSoon}
+                    class="bill-checkbox w-5 h-5 rounded text-[#007aff] accent-[#007aff] cursor-pointer"
+                  />
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2">
+                      <span class="text-sm font-semibold text-[#1a1b1f] truncate">{bill.merchant}</span>
+                      <span class="text-[10px] px-1.5 py-0.2 bg-[#f4f3f8] text-[#717786] rounded-md font-medium">{bill.category}</span>
+                    </div>
+                    <span class="text-xs text-[#717786] block mt-0.5">
+                      {diffDays > 0 ? `Due in ${diffDays} days` : (diffDays === 0 ? 'Due today' : `Due ${bill.due_date}`)} · Due {bill.due_date}
+                    </span>
+                  </div>
+                </div>
+                <span class="text-sm font-semibold text-[#1a1b1f] tabular-nums shrink-0 ml-3">
+                  ${Number(bill.amount).toFixed(2)}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
 
-        <label class="flex items-center justify-between px-4 py-3 cursor-pointer">
-          <div class="flex items-center gap-3">
-            <input type="checkbox" checked class="w-5 h-5 rounded text-[#007aff] accent-[#007aff]" />
-            <div>
-              <span class="text-sm font-semibold text-[#1a1b1f] block">State Farm Insurance</span>
-              <span class="text-xs text-[#717786]">Due in 15 days</span>
-            </div>
-          </div>
-          <span class="text-sm font-semibold text-[#1a1b1f] tabular-nums">$185.00</span>
-        </label>
-
-        <label class="flex items-center justify-between px-4 py-3 cursor-pointer">
-          <div class="flex items-center gap-3">
-            <input type="checkbox" checked class="w-5 h-5 rounded text-[#007aff] accent-[#007aff]" />
-            <div>
-              <span class="text-sm font-semibold text-[#1a1b1f] block">Verizon Wireless</span>
-              <span class="text-xs text-[#717786]">Due in 18 days</span>
-            </div>
-          </div>
-          <span class="text-sm font-semibold text-[#1a1b1f] tabular-nums">$137.61</span>
-        </label>
-      </div>
+    <!-- Quick Action -->
+    <div class="pt-2">
+      <a href="/reserved" class="w-full py-3.5 px-4 bg-[#007aff] hover:bg-[#0070eb] active:scale-[0.99] text-white font-semibold text-sm rounded-2xl shadow-lg shadow-[#007aff]/30 transition-all flex items-center justify-center gap-2">
+        <span class="material-symbols-outlined text-[20px]">shield</span>
+        View Ring-Fenced Vault
+      </a>
     </div>
   </div>
 
-  <script>
-    const slider = document.getElementById('coverageRange') as HTMLInputElement;
+  <script define:vars={{ spendablePool }}>
+    const slider = document.getElementById('coverageRange');
     const label = document.getElementById('coverageDaysLabel');
-    const amount = document.getElementById('quarantinedAmount');
-    const safeDaily = document.getElementById('safeDaily');
+    const amountLabel = document.getElementById('quarantinedAmount');
+    const safeDailyLabel = document.getElementById('safeDaily');
+    const includedCount = document.getElementById('includedCount');
+    const toggleAllBtn = document.getElementById('toggleAllBtn');
+    const checkboxes = document.querySelectorAll('.bill-checkbox');
+    const billItems = document.querySelectorAll('.bill-item');
 
-    slider?.addEventListener('input', (e) => {
-      const days = parseInt((e.target as HTMLInputElement).value, 10);
+    function recalculate() {
+      const days = parseInt(slider.value, 10);
       if (label) label.textContent = `Next ${days} Days`;
 
-      // Dynamic calculation
-      let pool = 112.40 + 14.99;
-      if (days >= 15) pool += 185.00;
-      if (days >= 18) pool += 137.61;
-      if (days >= 35) pool += 260.00;
+      let totalQuarantined = 0;
+      let count = 0;
 
-      if (amount) amount.textContent = `$${pool.toFixed(2)}`;
+      billItems.forEach(item => {
+        const cb = item.querySelector('.bill-checkbox');
+        const amount = parseFloat(item.getAttribute('data-amount') || '0');
+        if (cb && cb.checked) {
+          totalQuarantined += amount;
+          count++;
+        }
+      });
 
-      const remainingSpend = 2480.50 - (pool - 450.00);
-      const daily = remainingSpend / days;
-      if (safeDaily) safeDaily.textContent = `$${Math.max(10, daily).toFixed(2)} / day`;
+      if (amountLabel) amountLabel.textContent = `$${totalQuarantined.toFixed(2)}`;
+      if (includedCount) includedCount.textContent = String(count);
+
+      // Remaining safe daily spending calculation
+      const remainingSpend = Math.max(0, spendablePool - totalQuarantined);
+      const daily = remainingSpend / Math.max(1, days);
+      if (safeDailyLabel) {
+        safeDailyLabel.textContent = `$${daily.toFixed(2)} / day`;
+      }
+    }
+
+    // Auto-check/uncheck bills according to selected days window
+    function updateInclusionsByDays(days) {
+      billItems.forEach(item => {
+        const dueDays = parseInt(item.getAttribute('data-due-days') || '999', 10);
+        const cb = item.querySelector('.bill-checkbox');
+        if (cb) {
+          cb.checked = (dueDays <= days && dueDays >= -7);
+        }
+      });
+      recalculate();
+    }
+
+    slider?.addEventListener('input', (e) => {
+      const days = parseInt(e.target.value, 10);
+      updateInclusionsByDays(days);
     });
+
+    document.querySelectorAll('.slider-preset').forEach(preset => {
+      preset.addEventListener('click', () => {
+        const days = parseInt(preset.getAttribute('data-days') || '30', 10);
+        if (slider) slider.value = String(days);
+        updateInclusionsByDays(days);
+      });
+    });
+
+    checkboxes.forEach(cb => {
+      cb.addEventListener('change', recalculate);
+    });
+
+    toggleAllBtn?.addEventListener('click', () => {
+      const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+      checkboxes.forEach(cb => cb.checked = !allChecked);
+      toggleAllBtn.textContent = allChecked ? 'Select All' : 'Deselect All';
+      recalculate();
+    });
+
+    // Run initial calculation on page load
+    recalculate();
   </script>
 </AppLayout>
