@@ -1,11 +1,14 @@
 import type { APIRoute } from 'astro';
 import { getCloudflareBindings } from '../../lib/db';
 
+export const prerender = false;
+
 interface ParsedBill {
   merchant: string;
   amount: number | null;
   category: string;
   due_date: string;
+  ocr_raw?: string;
 }
 
 const CATEGORIES = [
@@ -23,13 +26,13 @@ function getDefaultDueDate(daysAhead: number = 14): string {
   return d.toISOString().split('T')[0];
 }
 
-function normalizeCategory(rawCat: string | undefined | null): string {
-  if (!rawCat) return 'General';
+function normalizeCategory(rawCat?: any): string {
+  if (!rawCat || typeof rawCat !== 'string') return 'General';
   const clean = rawCat.trim().toLowerCase();
   for (const cat of CATEGORIES) {
     if (cat.toLowerCase() === clean) return cat;
   }
-  if (/util|water|power|electric|gas|sewer|trash/i.test(clean)) return 'Utilities';
+  if (/util|power|electric|gas|water|fpl|duke|energy|sewer|trash/i.test(clean)) return 'Utilities';
   if (/sub|netflix|spotify|apple|cloud|software|membership|prime/i.test(clean)) return 'Subscriptions';
   if (/phone|mobile|telecom|internet|verizon|at&t|t-mobile|comcast|spectrum/i.test(clean)) return 'Telecom';
   if (/insur|state farm|geico|allstate|progressive|health/i.test(clean)) return 'Insurance';
@@ -37,277 +40,217 @@ function normalizeCategory(rawCat: string | undefined | null): string {
   return 'General';
 }
 
-function extractJsonBill(text: string): ParsedBill | null {
-  if (!text) return null;
-  // Strip code fences if present
-  const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-  const jsonMatch = cleaned.match(/\{[\s\S]*?\}/);
-  if (!jsonMatch) return null;
-
-  try {
-    const obj = JSON.parse(jsonMatch[0]);
-    let merchant = typeof obj.merchant === 'string' ? obj.merchant.trim() : '';
-    let amount: number | null = null;
-    if (obj.amount !== undefined && obj.amount !== null) {
-      const parsedNum = typeof obj.amount === 'number' ? obj.amount : parseFloat(String(obj.amount).replace(/[^0-9.]/g, ''));
-      if (!isNaN(parsedNum) && parsedNum > 0) {
-        amount = Math.round(parsedNum * 100) / 100;
-      }
-    }
-
-    let dueDate = getDefaultDueDate(14);
-    if (obj.due_date && /^\d{4}-\d{2}-\d{2}$/.test(String(obj.due_date).trim())) {
-      dueDate = String(obj.due_date).trim();
-    }
-
-    const category = normalizeCategory(obj.category);
-
-    return {
-      merchant,
-      amount,
-      category,
-      due_date: dueDate
-    };
-  } catch {
-    return null;
+function parseModelOutput(raw: any): ParsedBill {
+  let text = '';
+  if (typeof raw === 'string') {
+    text = raw;
+  } else if (raw && typeof raw.response === 'string') {
+    text = raw.response;
+  } else {
+    text = JSON.stringify(raw || '');
   }
-}
 
-function extractRegexBill(text: string): ParsedBill {
   let merchant = '';
   let amount: number | null = null;
   let category = 'General';
   let dueDate = getDefaultDueDate(14);
 
-  if (!text) {
-    return { merchant, amount, category, due_date: dueDate };
+  // Strategy A: JSON Extraction
+  const cleanedJsonStr = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+  const jsonMatch = cleanedJsonStr.match(/\{[\s\S]*?\}/);
+  if (jsonMatch) {
+    try {
+      const obj = JSON.parse(jsonMatch[0]);
+      if (obj.merchant && typeof obj.merchant === 'string') {
+        merchant = obj.merchant.trim();
+      }
+      if (obj.amount !== undefined && obj.amount !== null) {
+        const num = typeof obj.amount === 'number' ? obj.amount : parseFloat(String(obj.amount).replace(/[^0-9.]/g, ''));
+        if (!isNaN(num) && num > 0) amount = Math.round(num * 100) / 100;
+      }
+      if (obj.due_date && /^\d{4}-\d{2}-\d{2}$/.test(String(obj.due_date).trim())) {
+        dueDate = String(obj.due_date).trim();
+      }
+      if (obj.category) {
+        category = normalizeCategory(obj.category);
+      }
+    } catch (e) {}
   }
 
-  // 1. Amount heuristic (look for Total, Balance, Amount Due, $, or highest reasonable price)
-  const totalMatches = [
-    /(?:total|balance due|amount due|amount|total due|pay this amount)\s*[:$]?\s*([0-9]+(?:\.[0-9]{2})?)/i,
-    /\$\s*([0-9]+\.[0-9]{2})/,
-    /([0-9]+\.[0-9]{2})\s*USD/i
-  ];
-
-  for (const regex of totalMatches) {
-    const m = text.match(regex);
-    if (m && m[1]) {
-      const val = parseFloat(m[1]);
-      if (!isNaN(val) && val > 0 && val < 100000) {
-        amount = Math.round(val * 100) / 100;
-        break;
+  // Strategy B: Robust Regex Recovery for amount
+  if (amount === null || isNaN(amount)) {
+    // Look for explicit total / amount keywords or dollar sign
+    const amountRegexes = [
+      /(?:total\s+amount|amount\s+due|total\s+due|balance\s+due|total)\s*[:$]?\s*\$?([0-9]+(?:\.[0-9]{2})?)/i,
+      /\$\s*([0-9]+\.[0-9]{2})/,
+      /([0-9]+\.[0-9]{2})\s*USD/i
+    ];
+    for (const r of amountRegexes) {
+      const m = text.match(r);
+      if (m && m[1]) {
+        const val = parseFloat(m[1]);
+        if (!isNaN(val) && val > 0 && val < 50000) {
+          amount = Math.round(val * 100) / 100;
+          break;
+        }
       }
     }
   }
 
-  // 2. Date heuristic (YYYY-MM-DD or MM/DD/YYYY or DD-Mon-YYYY)
-  const dateIsoMatch = text.match(/(?:due(?:\s+date)?|date)?\s*[:]?\s*(\b20\d{2}[-/](?:0[1-9]|1[0-2])[-/](?:0[1-9]|[12]\d|3[01])\b)/i);
-  if (dateIsoMatch && dateIsoMatch[1]) {
-    dueDate = dateIsoMatch[1].replace(/\//g, '-');
-  } else {
-    const dateUsMatch = text.match(/(?:due(?:\s+date)?|date)?\s*[:]?\s*(\b(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/(20\d{2})\b)/i);
-    if (dateUsMatch && dateUsMatch[4]) {
-      dueDate = `${dateUsMatch[4]}-${dateUsMatch[2].padStart(2, '0')}-${dateUsMatch[3].padStart(2, '0')}`;
+  // Strategy C: Regex Recovery for merchant
+  if (!merchant) {
+    const knownVendors = [
+      'Florida Power & Light', 'FPL', 'Duke Energy', 'Con Edison', 'Pacific Gas & Electric', 'PG&E',
+      'AT&T', 'Verizon', 'T-Mobile', 'Comcast', 'Xfinity', 'Spectrum', 'Netflix', 'Spotify', 'Amazon'
+    ];
+    for (const v of knownVendors) {
+      if (new RegExp('\\b' + v + '\\b', 'i').test(text)) {
+        merchant = v;
+        break;
+      }
+    }
+    if (!merchant) {
+      const mMatch = text.match(/(?:from|merchant|vendor|company|biller|store)\s*[:]?\s*([A-Za-z0-9\s&.',-]{3,35})(?:\n|,|\.|$)/i);
+      if (mMatch && mMatch[1]) {
+        merchant = mMatch[1].trim();
+      }
     }
   }
 
-  // 3. Merchant heuristic
-  const merchantMatch = text.match(/(?:merchant|vendor|company|store|biller)\s*[:]\s*([A-Za-z0-9\s&.',-]+?)(?:\n|$)/i);
-  if (merchantMatch && merchantMatch[1]) {
-    merchant = merchantMatch[1].trim();
-  } else {
-    // Take first non-empty line of text that doesn't look like an amount or date
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 2 && !/^\d+$/.test(l) && !l.startsWith('{'));
-    if (lines.length > 0) {
-      merchant = lines[0].slice(0, 40).replace(/["'{}]/g, '').trim();
-    }
+  // Strategy D: Due Date regex recovery
+  const dateMatch = text.match(/(\b20\d{2}[-/](?:0[1-9]|1[0-2])[-/](?:0[1-9]|[12]\d|3[01])\b)/);
+  if (dateMatch) {
+    dueDate = dateMatch[1].replace(/\//g, '-');
   }
 
-  category = normalizeCategory(text);
+  if (category === 'General') {
+    category = normalizeCategory(text + ' ' + merchant);
+  }
 
-  return { merchant, amount, category, due_date: dueDate };
+  return {
+    merchant,
+    amount,
+    category,
+    due_date: dueDate,
+    ocr_raw: text.slice(0, 500)
+  };
 }
 
 export const POST: APIRoute = async ({ request }) => {
   const startTime = Date.now();
-  let merchant = '';
-  let amount: number | null = null;
-  let category = 'General';
-  let dueDateStr = getDefaultDueDate(14);
-  let ocrError: string | null = null;
-  let modelUsed: string | null = null;
-
   try {
-    const body = await request.json().catch(() => ({}));
-    const rawImageInput = body.image || '';
-
-    if (!rawImageInput) {
-      return new Response(
-        JSON.stringify({
-          merchant: '',
-          amount: null,
-          category: 'General',
-          due_date: dueDateStr,
-          error: 'No image provided'
-        }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return new Response(JSON.stringify({ error: 'Request body must be valid JSON' }), { status: 400 });
     }
 
-    // Strip Data URL prefix if present (works for JPEG, PNG, WEBP, etc.)
+    const rawImageInput = body.image || '';
+    if (!rawImageInput) {
+      return new Response(JSON.stringify({ error: 'Missing image payload' }), { status: 400 });
+    }
+
     const cleanBase64 = String(rawImageInput).replace(/^data:image\/[a-zA-Z+]+;base64,/, '').trim();
-    
-    // Convert base64 to binary buffer/array
-    let binaryArray: number[];
-    try {
-      const binaryString = atob(cleanBase64);
-      binaryArray = new Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        binaryArray[i] = binaryString.charCodeAt(i);
-      }
-    } catch (b64Err: any) {
-      return new Response(
-        JSON.stringify({
-          merchant: '',
-          amount: null,
-          category: 'General',
-          due_date: dueDateStr,
-          error: `Invalid base64 payload: ${b64Err?.message || b64Err}`
-        }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
+    const binaryString = atob(cleanBase64);
+    const binaryArray = new Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      binaryArray[i] = binaryString.charCodeAt(i);
     }
 
     const env = await getCloudflareBindings();
-
     if (!env?.AI) {
-      // Local dev or missing AI binding: fallback gracefully with default values
-      return new Response(
-        JSON.stringify({
-          merchant: 'Receipt Scan (AI Dev Mock)',
-          amount: 45.50,
-          category: 'Utilities',
-          due_date: dueDateStr,
-          error: 'Cloudflare Workers AI binding not available in local dev environment'
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
+      return new Response(JSON.stringify({
+        merchant: 'Mock Vendor',
+        amount: 50.00,
+        category: 'General',
+        due_date: getDefaultDueDate(14),
+        error: 'No AI binding'
+      }));
     }
 
-    const promptText = `Extract invoice/receipt details. Return ONLY a single raw JSON object with keys: "merchant" (string), "amount" (number, e.g. 54.20), "category" (one of: Utilities, Subscriptions, Telecom, Insurance, Food & Groceries, General), "due_date" (YYYY-MM-DD). Strictly no markdown, no explanation:
-{"merchant":"...","amount":0.00,"category":"...","due_date":"YYYY-MM-DD"}`;
-
     let parsedResult: ParsedBill | null = null;
+    let modelUsed = '@cf/meta/llama-3.2-11b-vision-instruct';
+    let ocrError: string | null = null;
 
-    // --- STRATEGY 1: Primary Model: @cf/meta/llama-3.2-11b-vision-instruct ---
     try {
+      const prompt = `Extract receipt details:
+1. Vendor / Merchant name
+2. Total amount due/paid
+3. Due date (YYYY-MM-DD)
+4. Category (Utilities, Subscriptions, Telecom, Insurance, Food & Groceries, General)
+
+Output valid JSON only:
+{"merchant":"...", "amount":0.00, "category":"...", "due_date":"YYYY-MM-DD"}`;
+
       const aiResponse: any = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
         image: binaryArray,
-        prompt: promptText,
-        max_tokens: 180,
+        prompt: prompt,
+        max_tokens: 220,
         temperature: 0.1
       });
 
-      if (aiResponse?.response) {
-        modelUsed = '@cf/meta/llama-3.2-11b-vision-instruct';
-        parsedResult = extractJsonBill(aiResponse.response);
-        if (!parsedResult) {
-          parsedResult = extractRegexBill(aiResponse.response);
-        }
+      if (aiResponse) {
+        parsedResult = parseModelOutput(aiResponse);
       }
-    } catch (err: any) {
-      console.warn('Primary vision model (@cf/meta/llama-3.2-11b-vision-instruct) failed:', err?.message || err);
-      ocrError = `Primary model error: ${err?.message || 'Inference error'}`;
+    } catch (primaryErr: any) {
+      console.warn('Primary vision model failed:', primaryErr?.message || primaryErr);
+      ocrError = primaryErr?.message || 'Primary model inference error';
     }
 
-    // --- STRATEGY 2: Fallback Model: @cf/llava-hf/llava-1.5-7b-hf ---
-    // Triggered if primary threw an error (e.g. 3043) or produced no merchant/amount
     if (!parsedResult || (!parsedResult.merchant && parsedResult.amount === null)) {
       try {
-        const llavaPrompt = `Extract invoice details: merchant name, total amount, category, and due date YYYY-MM-DD. Format: {"merchant": "...", "amount": 0.00, "category": "...", "due_date": "YYYY-MM-DD"}`;
         const llavaRes: any = await env.AI.run('@cf/llava-hf/llava-1.5-7b-hf', {
           image: binaryArray,
-          prompt: llavaPrompt,
-          max_tokens: 200,
+          prompt: 'What is the merchant name and total dollar amount in this image? Output JSON: {"merchant":"...","amount":0.00}',
+          max_tokens: 150,
           temperature: 0.1
         });
-
-        const outputText = llavaRes?.description || llavaRes?.response || '';
-        if (outputText) {
+        if (llavaRes) {
           modelUsed = '@cf/llava-hf/llava-1.5-7b-hf';
-          const llavaParsed = extractJsonBill(outputText);
-          if (llavaParsed && (llavaParsed.merchant || llavaParsed.amount !== null)) {
-            parsedResult = llavaParsed;
+          const fallbackParsed = parseModelOutput(llavaRes);
+          if (fallbackParsed.merchant || fallbackParsed.amount !== null) {
+            parsedResult = fallbackParsed;
             ocrError = null;
-          } else {
-            const regexParsed = extractRegexBill(outputText);
-            if (regexParsed.merchant || regexParsed.amount !== null) {
-              parsedResult = regexParsed;
-              ocrError = null;
-            }
           }
         }
       } catch (fallbackErr: any) {
-        console.warn('Fallback vision model (@cf/llava-hf/llava-1.5-7b-hf) failed:', fallbackErr?.message || fallbackErr);
-        if (!ocrError) {
-          ocrError = `Fallback model error: ${fallbackErr?.message || 'Inference error'}`;
-        }
+        console.warn('Fallback model failed:', fallbackErr?.message || fallbackErr);
       }
     }
 
-    if (parsedResult) {
-      if (parsedResult.merchant) merchant = parsedResult.merchant;
-      if (parsedResult.amount !== null) amount = parsedResult.amount;
-      if (parsedResult.category) category = parsedResult.category;
-      if (parsedResult.due_date) dueDateStr = parsedResult.due_date;
-      if (merchant || amount !== null) {
-        ocrError = null; // Successfully extracted
-      }
-    }
+    const finalBill: ParsedBill = parsedResult || {
+      merchant: '',
+      amount: null,
+      category: 'General',
+      due_date: getDefaultDueDate(14)
+    };
 
-    const durationMs = Date.now() - startTime;
+    return new Response(JSON.stringify({
+      merchant: finalBill.merchant,
+      amount: finalBill.amount,
+      category: finalBill.category,
+      due_date: finalBill.due_date,
+      ocr_raw: finalBill.ocr_raw,
+      model: modelUsed,
+      processing_time_ms: Date.now() - startTime,
+      error: ocrError
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
 
-    return new Response(
-      JSON.stringify({
-        merchant,
-        amount,
-        category,
-        due_date: dueDateStr,
-        error: ocrError,
-        model: modelUsed,
-        processing_time_ms: durationMs
-      }),
-      {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          'Server-Timing': `ocr;dur=${durationMs}`
-        }
-      }
-    );
-  } catch (fatalError: any) {
-    return new Response(
-      JSON.stringify({
-        merchant: '',
-        amount: null,
-        category: 'General',
-        due_date: dueDateStr,
-        error: fatalError?.message || 'Server error'
-      }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
+  } catch (err: any) {
+    console.error('Fatal OCR error:', err);
+    return new Response(JSON.stringify({
+      merchant: '',
+      amount: null,
+      category: 'General',
+      due_date: getDefaultDueDate(14),
+      error: err?.message || 'Internal server error'
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 };
