@@ -34,6 +34,46 @@ export const POST: APIRoute = async ({ request }) => {
   }
 };
 
+export const PUT: APIRoute = async ({ request }) => {
+  try {
+    const data = await request.json();
+    const { id, merchant, amount, category, due_date, status = 'reserved' } = data;
+
+    if (!id || !merchant || amount === undefined || isNaN(amount) || !due_date) {
+      return new Response(JSON.stringify({ error: 'Missing required bill fields' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const env = await getCloudflareBindings();
+    const db = env?.DB;
+
+    if (db) {
+      await db.prepare(
+        `UPDATE bills 
+         SET merchant = ?, amount = ?, category = ?, due_date = ?, status = ?
+         WHERE id = ?`
+      ).bind(merchant, amount, category, due_date, status, id).run();
+
+      return new Response(JSON.stringify({ success: true, id }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    return new Response(JSON.stringify({ success: true, simulated: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (err: any) {
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+};
+
 export const DELETE: APIRoute = async ({ request }) => {
   try {
     const url = new URL(request.url);
